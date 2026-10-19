@@ -233,8 +233,61 @@ async def tray_download(discord_id: str = Query(default="")):
     """Returns the download URL for XZX Tray.exe (HWID-locked link)."""
     if not TRAY_EXE_URL:
         raise HTTPException(503, "Tray download not configured")
-    # you can make this signed/HWID-locked later; for now just return the URL
     return {"url": TRAY_EXE_URL}
+
+
+@app.get("/tray/install")
+async def tray_install(discord_id: str = Query(default="")):
+    """
+    Serves a .bat installer that:
+    1. Downloads XZX Tray.exe
+    2. Saves the user's Discord ID next to the exe
+    3. Runs the exe
+    Users click the download button → get this .bat → run it once → done.
+    """
+    if not TRAY_EXE_URL:
+        raise HTTPException(503, "Tray download not configured")
+    if not discord_id:
+        raise HTTPException(400, "missing discord_id")
+
+    bat = f"""@echo off
+title XZX Suite Setup
+echo ============================================
+echo  XZX Suite - One-Time Setup
+echo ============================================
+echo.
+echo Downloading XZX Tray...
+
+set INSTALL_DIR=%LOCALAPPDATA%\\XZX Suite
+if not exist "%INSTALL_DIR%" mkdir "%INSTALL_DIR%"
+
+:: Save Discord ID so the tray knows who you are
+echo {discord_id}> "%INSTALL_DIR%\\.xzx_discord_id"
+
+:: Download the tray exe
+powershell -Command "Invoke-WebRequest -Uri '{TRAY_EXE_URL}' -OutFile '%INSTALL_DIR%\\XZX Tray.exe'" 2>nul
+if not exist "%INSTALL_DIR%\\XZX Tray.exe" (
+    echo ERROR: Download failed. Check your internet connection.
+    pause
+    exit /b 1
+)
+
+echo Setup complete! Launching XZX Tray...
+start "" "%INSTALL_DIR%\\XZX Tray.exe"
+echo.
+echo XZX Tray is now running in your system tray.
+echo Go back to Discord and click Launch again!
+timeout /t 3 >nul
+"""
+
+    from fastapi.responses import Response
+    return Response(
+        content=bat,
+        media_type="application/octet-stream",
+        headers={
+            "Content-Disposition": f'attachment; filename="XZX Setup.bat"'
+        }
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────────
