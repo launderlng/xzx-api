@@ -24,6 +24,7 @@ SECRET_SALT  = b"xzx_suite_2025_salt_noclone"
 DB_PATH      = os.getenv("API_DB_PATH", "xzx_api.db")
 TRAY_EXE_URL = os.getenv("TRAY_EXE_URL", "")   # set in Railway: direct link to XZX Tray.exe
 SIGNAL_TTL   = 60  # seconds a launch signal stays valid
+ADMIN_SECRET = os.getenv("ADMIN_SECRET", "")   # set in Railway to enable /admin/grant
 
 # ── database ─────────────────────────────────────────────────────────────────────
 def get_db():
@@ -500,6 +501,35 @@ async def linked_check(request: Request):
     form = await request.form()
     discord_id = str(form.get("discord_id", "")).strip()
     return {"linked": _has_valid_license(discord_id)}
+
+
+# ─────────────────────────────────────────────────────────────────────────────────
+#  ADMIN  (manual license grants — guarded by ADMIN_SECRET env var)
+# ─────────────────────────────────────────────────────────────────────────────────
+
+@app.get("/admin/grant")
+async def admin_grant(discord_id: str = Query(...), secret: str = Query(...)):
+    """
+    One-off way to grant a license without a payment flow wired up yet.
+    Visit this URL with your own secret to activate a Discord ID.
+    """
+    if not ADMIN_SECRET or secret != ADMIN_SECRET:
+        raise HTTPException(403, "bad secret")
+    con = get_db()
+    row = con.execute(
+        "SELECT id FROM licenses WHERE discord_id = ? ORDER BY id DESC LIMIT 1",
+        (discord_id,)
+    ).fetchone()
+    if row:
+        con.execute("UPDATE licenses SET active = 1 WHERE id = ?", (row["id"],))
+    else:
+        con.execute(
+            "INSERT INTO licenses (discord_id, active, created_at) VALUES (?, 1, ?)",
+            (discord_id, now_iso())
+        )
+    con.commit()
+    con.close()
+    return {"ok": True, "discord_id": discord_id, "active": True}
 
 
 # ─────────────────────────────────────────────────────────────────────────────────
