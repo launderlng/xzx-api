@@ -114,6 +114,20 @@ app = FastAPI(lifespan=lifespan)
 #  TRAY ROUTES
 # ─────────────────────────────────────────────────────────────────────────────────
 
+@app.get("/tray/hwid")
+async def tray_hwid(discord_id: str = Query(default="")):
+    """Bot calls this to look up the HWID registered for a Discord user."""
+    if not discord_id:
+        raise HTTPException(400, "missing discord_id")
+    con = get_db()
+    row = con.execute(
+        "SELECT hwid FROM tray_agents WHERE discord_id = ? ORDER BY last_seen DESC LIMIT 1",
+        (str(discord_id),)
+    ).fetchone()
+    con.close()
+    return {"hwid": row[0] if row else None}
+
+
 @app.post("/tray/register")
 async def tray_register(request: Request):
     """Tray agent calls this on startup to link HWID → Discord ID."""
