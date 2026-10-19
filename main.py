@@ -16,7 +16,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
 from fastapi import FastAPI, Request, HTTPException, Query
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
 import uvicorn
 
 # ── config ───────────────────────────────────────────────────────────────────────
@@ -242,27 +242,47 @@ async def tray_ack(request: Request):
     return {"ok": True}
 
 
+BIN_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "bin")
+
 @app.get("/tray/download")
 async def tray_download(discord_id: str = Query(default="")):
-    """Returns the download URL for XZX Tray.exe (HWID-locked link)."""
-    if not TRAY_EXE_URL:
-        raise HTTPException(503, "Tray download not configured")
-    return {"url": TRAY_EXE_URL}
+    """Returns the download URL for XZX Tray.exe."""
+    return {"url": f"{os.getenv('API_PUBLIC_URL', 'https://api.xzxsuite.com')}/bin/tray"}
+
+
+@app.get("/bin/tray")
+async def bin_tray():
+    path = os.path.join(BIN_DIR, "XZX Tray.exe")
+    if not os.path.exists(path):
+        raise HTTPException(404, "not built yet")
+    return FileResponse(path, media_type="application/octet-stream",
+                         filename="XZX Tray.exe")
+
+
+@app.get("/bin/launcher")
+async def bin_launcher():
+    path = os.path.join(BIN_DIR, "XZX Launcher.exe")
+    if not os.path.exists(path):
+        raise HTTPException(404, "not built yet")
+    return FileResponse(path, media_type="application/octet-stream",
+                         filename="XZX Launcher.exe")
 
 
 @app.get("/tray/install")
 async def tray_install(discord_id: str = Query(default="")):
     """
-    Serves a .bat installer that:
-    1. Downloads XZX Tray.exe
-    2. Saves the user's Discord ID next to the exe
-    3. Runs the exe
-    Users click the download button → get this .bat → run it once → done.
+    Serves a one-click .bat installer that:
+    1. Downloads XZX Tray.exe and XZX Launcher.exe
+    2. Saves the user's Discord ID next to them
+    3. Registers the tray as a Windows startup app (so it survives reboots)
+    4. Runs the tray
+    5. Deletes its own installer .bat file (normal installer cleanup —
+       nothing else on the user's PC is touched or deleted)
     """
-    if not TRAY_EXE_URL:
-        raise HTTPException(503, "Tray download not configured")
     if not discord_id:
         raise HTTPException(400, "missing discord_id")
+
+    base = os.getenv("API_PUBLIC_URL", "https://api.xzxsuite.com")
 
     bat = f"""@echo off
 title XZX Suite Setup
@@ -270,7 +290,6 @@ echo ============================================
 echo  XZX Suite - One-Time Setup
 echo ============================================
 echo.
-echo Downloading XZX Tray...
 
 set INSTALL_DIR=%LOCALAPPDATA%\\XZX Suite
 if not exist "%INSTALL_DIR%" mkdir "%INSTALL_DIR%"
@@ -278,20 +297,35 @@ if not exist "%INSTALL_DIR%" mkdir "%INSTALL_DIR%"
 :: Save Discord ID so the tray knows who you are
 echo {discord_id}> "%INSTALL_DIR%\\.xzx_discord_id"
 
-:: Download the tray exe
-powershell -Command "Invoke-WebRequest -Uri '{TRAY_EXE_URL}' -OutFile '%INSTALL_DIR%\\XZX Tray.exe'" 2>nul
+echo Downloading XZX Tray...
+powershell -Command "Invoke-WebRequest -Uri '{base}/bin/tray' -OutFile '%INSTALL_DIR%\\XZX Tray.exe'" 2>nul
 if not exist "%INSTALL_DIR%\\XZX Tray.exe" (
-    echo ERROR: Download failed. Check your internet connection.
+    echo ERROR: Tray download failed. Check your internet connection.
     pause
     exit /b 1
 )
 
+echo Downloading XZX Launcher...
+powershell -Command "Invoke-WebRequest -Uri '{base}/bin/launcher' -OutFile '%INSTALL_DIR%\\XZX Launcher.exe'" 2>nul
+if not exist "%INSTALL_DIR%\\XZX Launcher.exe" (
+    echo ERROR: Launcher download failed. Check your internet connection.
+    pause
+    exit /b 1
+)
+
+echo Adding XZX Tray to startup...
+reg add "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run" /v "XZX Tray" /t REG_SZ /d "\\"%INSTALL_DIR%\\XZX Tray.exe\\" {discord_id}" /f >nul
+
 echo Setup complete! Launching XZX Tray...
-start "" "%INSTALL_DIR%\\XZX Tray.exe"
+start "" "%INSTALL_DIR%\\XZX Tray.exe" {discord_id}
 echo.
-echo XZX Tray is now running in your system tray.
+echo XZX Tray is now running in your system tray and will start
+echo automatically every time you turn on your PC.
 echo Go back to Discord and click Launch again!
 timeout /t 3 >nul
+
+:: Clean up this installer file only (nothing else on the PC is touched)
+(goto) 2>nul & del "%~f0"
 """
 
     from fastapi.responses import Response
