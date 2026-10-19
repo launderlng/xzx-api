@@ -308,6 +308,96 @@ timeout /t 3 >nul
 #  VERIFY / LICENSE ROUTES  (used by the launcher)
 # ─────────────────────────────────────────────────────────────────────────────────
 
+DISCORD_CLIENT_ID     = os.getenv("DISCORD_CLIENT_ID", "1556620681083617340")
+DISCORD_CLIENT_SECRET = os.getenv("DISCORD_CLIENT_SECRET", "")
+
+@app.post("/verify/oauth")
+async def verify_oauth(request: Request):
+    """
+    Launcher's 'Login with Discord' flow lands here.
+    1. Exchange the OAuth code for a Discord access token.
+    2. Fetch the Discord user's id via /users/@me.
+    3. Run the same license/HWID check as /verify.
+    """
+    import urllib.request as _ur
+    import urllib.parse as _up
+
+    form = await request.form()
+    code         = str(form.get("code", "")).strip()
+    redirect_uri = str(form.get("redirect_uri", "")).strip()
+    hwid         = str(form.get("hwid", "")).strip()
+
+    if not code or not redirect_uri:
+        raise HTTPException(400, "missing code or redirect_uri")
+    if not DISCORD_CLIENT_SECRET:
+        raise HTTPException(503, "oauth not configured on server")
+
+    # 1. exchange code for access token
+    token_payload = _up.urlencode({
+        "client_id":     DISCORD_CLIENT_ID,
+        "client_secret": DISCORD_CLIENT_SECRET,
+        "grant_type":    "authorization_code",
+        "code":          code,
+        "redirect_uri":  redirect_uri,
+    }).encode()
+
+    try:
+        req = _ur.Request(
+            "https://discord.com/api/oauth2/token",
+            data=token_payload, method="POST",
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+        )
+        with _ur.urlopen(req, timeout=10) as r:
+            token_data = json.loads(r.read())
+        access_token = token_data.get("access_token")
+        if not access_token:
+            return {"valid": False, "reason": "oauth_token_failed"}
+
+        # 2. fetch discord user id
+        req2 = _ur.Request(
+            "https://discord.com/api/users/@me",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        with _ur.urlopen(req2, timeout=10) as r2:
+            user_data = json.loads(r2.read())
+        discord_id = str(user_data.get("id", "")).strip()
+        if not discord_id:
+            return {"valid": False, "reason": "oauth_user_failed"}
+    except Exception as exc:
+        return {"valid": False, "reason": f"oauth_error: {exc}"}
+
+    # 3. run the same license/HWID logic as /verify
+    con = get_db()
+    row = con.execute(
+        """SELECT * FROM licenses
+           WHERE discord_id = ?
+             AND active = 1
+             AND (expires_at IS NULL OR expires_at > datetime('now'))
+           ORDER BY id DESC LIMIT 1""",
+        (discord_id,)
+    ).fetchone()
+
+    if not row:
+        con.close()
+        return {"valid": False, "reason": "no_license"}
+
+    if not row["hwid"] and hwid:
+        con.execute("UPDATE licenses SET hwid = ? WHERE id = ?", (hwid, row["id"]))
+        con.commit()
+    elif row["hwid"] and hwid and row["hwid"] != hwid:
+        con.close()
+        return {"valid": False, "reason": "hwid_mismatch"}
+    con.close()
+
+    return {
+        "valid":      True,
+        "discord_id": discord_id,
+        "username":   discord_id,
+        "linked":     True,
+        "macros":     [row["macro"]] if row["macro"] else [],
+    }
+
+
 @app.post("/verify")
 async def verify(request: Request):
     """Launcher calls this on every startup to validate the Discord ID + HWID."""
