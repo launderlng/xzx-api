@@ -375,11 +375,16 @@ async def verify_oauth(request: Request):
         "redirect_uri":  redirect_uri,
     }).encode()
 
+    DISCORD_UA = "XZXSuite (https://xzxsuite.com, 1.0)"
+
     try:
         req = _ur.Request(
             "https://discord.com/api/oauth2/token",
             data=token_payload, method="POST",
-            headers={"Content-Type": "application/x-www-form-urlencoded"},
+            headers={
+                "Content-Type": "application/x-www-form-urlencoded",
+                "User-Agent": DISCORD_UA,
+            },
         )
         with _ur.urlopen(req, timeout=10) as r:
             token_data = json.loads(r.read())
@@ -390,13 +395,19 @@ async def verify_oauth(request: Request):
         # 2. fetch discord user id
         req2 = _ur.Request(
             "https://discord.com/api/users/@me",
-            headers={"Authorization": f"Bearer {access_token}"},
+            headers={
+                "Authorization": f"Bearer {access_token}",
+                "User-Agent": DISCORD_UA,
+            },
         )
         with _ur.urlopen(req2, timeout=10) as r2:
             user_data = json.loads(r2.read())
         discord_id = str(user_data.get("id", "")).strip()
         if not discord_id:
             return {"valid": False, "reason": "oauth_user_failed"}
+    except _ur.HTTPError as exc:
+        body = exc.read().decode(errors="replace")[:300]
+        return {"valid": False, "reason": f"oauth_http_{exc.code}: {body}"}
     except Exception as exc:
         return {"valid": False, "reason": f"oauth_error: {exc}"}
 
