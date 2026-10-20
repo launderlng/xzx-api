@@ -372,6 +372,16 @@ async def bin_tray_src():
                          filename="xzx_tray.py")
 
 
+@app.get("/bin/launcher-src")
+async def bin_launcher_src():
+    """Raw xzx_launcher.py source — same idea as /bin/tray-src."""
+    path = os.path.join(BIN_DIR, "xzx_launcher.py")
+    if not os.path.exists(path):
+        raise HTTPException(404, "not uploaded yet")
+    return FileResponse(path, media_type="text/x-python",
+                         filename="xzx_launcher.py")
+
+
 @app.get("/tray/install")
 async def tray_install(request: Request, discord_id: str = Query(default="")):
     """

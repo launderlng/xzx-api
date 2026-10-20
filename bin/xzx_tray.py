@@ -149,12 +149,56 @@ def _verify_token(token: str, nonce: str) -> bool:
 
 # ── download + run launcher ───────────────────────────────────────────────────────
 _launcher_proc = None
+_server_launcher_version = None   # set by each /tray/poll response
 
 def _get_launcher_path() -> Path:
     """Launcher lives next to this tray agent (installed together)."""
     if getattr(sys, 'frozen', False):
         return Path(sys.executable).parent / LAUNCHER_NAME
     return Path(__file__).resolve().parent / LAUNCHER_NAME
+
+def _get_version_marker_path() -> Path:
+    return _get_launcher_path().with_name(".xzx_launcher_ver")
+
+def _get_local_launcher_version() -> str:
+    try:
+        return _get_version_marker_path().read_text().strip()
+    except Exception:
+        return ""
+
+def _set_local_launcher_version(ver: str):
+    try:
+        _get_version_marker_path().write_text(ver)
+    except Exception:
+        pass
+
+def _download_launcher() -> bool:
+    """Fetch the current XZX Launcher.exe from the API and replace the local
+    copy, so a rebuilt/redeployed launcher reaches everyone's PC on their very
+    next /launch — no manual reinstall needed. Returns True on success."""
+    launcher = _get_launcher_path()
+    tmp_path = launcher.with_suffix(".new")
+    try:
+        req = urllib.request.Request(f"{API_BASE}/bin/launcher")
+        req.add_header("X-XZX-HWID", HWID)
+        with urllib.request.urlopen(req, timeout=30) as r:
+            data = r.read()
+        tmp_path.write_bytes(data)
+        # swap in — works even if the old exe is in use on Windows, since the
+        # running process keeps its own open handle to the old (now-renamed) file
+        try:
+            if launcher.exists():
+                launcher.unlink()
+        except Exception:
+            pass
+        tmp_path.replace(launcher)
+        return True
+    except Exception:
+        try:
+            tmp_path.unlink()
+        except Exception:
+            pass
+        return False
 
 def _request_launcher_download():
     """Ask server for a signed download URL for this HWID."""
@@ -175,12 +219,24 @@ def _launch():
         return  # already open
 
     launcher = _get_launcher_path()
-    if not launcher.exists():
-        # not installed locally — open download URL in browser as fallback
-        url = _request_launcher_download()
-        if url:
-            webbrowser.open(url)
-        return
+
+    # keep the launcher current: if the server has a newer build than what's
+    # on disk (or nothing is installed yet), grab it before opening anything —
+    # this is what makes a rebuilt launcher actually reach /launch
+    needs_update = (
+        not launcher.exists()
+        or (_server_launcher_version and _server_launcher_version != _get_local_launcher_version())
+    )
+    if needs_update:
+        if _download_launcher():
+            _set_local_launcher_version(_server_launcher_version or "")
+        elif not launcher.exists():
+            # nothing to run and the update failed — fall back to opening the
+            # download page in a browser so the user isn't left with silence
+            url = _request_launcher_download()
+            if url:
+                webbrowser.open(url)
+            return
 
     try:
         env = os.environ.copy()
@@ -199,7 +255,7 @@ def _launch():
 _last_ack = ""
 
 def _poll():
-    global _last_ack
+    global _last_ack, _server_launcher_version
     try:
         params = urllib.parse.urlencode({
             "hwid": HWID,
@@ -210,6 +266,9 @@ def _poll():
         req.add_header("X-XZX-HWID", HWID)
         with urllib.request.urlopen(req, timeout=8) as r:
             data = json.loads(r.read())
+
+        if data.get("launcher_version"):
+            _server_launcher_version = data["launcher_version"]
 
         if data.get("launch"):
             token = data.get("token", "")
