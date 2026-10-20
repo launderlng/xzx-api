@@ -234,6 +234,17 @@ async def tray_register(request: Request):
     return {"ok": True}
 
 
+def _launcher_version() -> str:
+    """A version string the tray can compare against — just the built
+    launcher exe's mtime, so every fresh build (rebuild + redeploy)
+    automatically bumps it with zero manual version-numbering."""
+    try:
+        path = os.path.join(BIN_DIR, "XZX Launcher.exe")
+        return str(int(os.path.getmtime(path)))
+    except Exception:
+        return "0"
+
+
 @app.get("/tray/poll")
 async def tray_poll(
     hwid: str = Query(...),
@@ -266,9 +277,10 @@ async def tray_poll(
     ).fetchone()
     con.close()
 
+    lv = _launcher_version()
     if row:
-        return {"launch": True, "nonce": row["nonce"], "token": row["token"]}
-    return {"launch": False}
+        return {"launch": True, "nonce": row["nonce"], "token": row["token"], "launcher_version": lv}
+    return {"launch": False, "launcher_version": lv}
 
 
 @app.post("/tray/signal")
