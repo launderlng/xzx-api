@@ -228,7 +228,7 @@ class Draggable:
 #  LOGIN WINDOW
 # ═══════════════════════════════════════════════════════════════════════════════
 class LoginWindow(Draggable):
-    RADIUS = 22  # whole-window corner radius
+    RADIUS = 28  # whole-window corner radius
 
     def __init__(self):
         self._discord_id  = ""
@@ -562,6 +562,23 @@ class LoginWindow(Draggable):
             return True, macro
         return False, (parts[1] if len(parts) > 1 else "Key not accepted.")
 
+    def _fetch_key_info(self, code: str) -> str:
+        """Plain-text length/expiry for a key (e.g. 'Lifetime', 'Expires in 12d'),
+        for showing in the Hub. Best-effort — an empty string just means the
+        Hub shows nothing instead of a number."""
+        if not code:
+            return ""
+        try:
+            resp = urllib.request.urlopen(
+                f"{BOT_BASE}/api/keyinfo?code={urllib.parse.quote(code)}",
+                timeout=8).read().decode(errors="replace").strip()
+            parts = resp.split("|")
+            if parts[0] == "OK" and len(parts) > 2:
+                return parts[2]
+        except Exception:
+            pass
+        return ""
+
     def _activate_all(self, codes: list, session: str):
         """Activates every key a linked Discord account owns, building up the
         set of macros it unlocks (a plain key unlocks one; an 'all macros' key
@@ -582,11 +599,13 @@ class LoginWindow(Draggable):
             else:
                 last_error = result
         if any_ok:
-            self.root.after(0, lambda: self._login_finish(owned))
+            codes = sorted(set(owned.values()))
+            key_length = self._fetch_key_info(codes[0]) if codes else ""
+            self.root.after(0, lambda: self._login_finish(owned, key_length))
         else:
             self.root.after(0, lambda: self._oauth_done(False, last_error))
 
-    def _login_finish(self, owned_macros: dict):
+    def _login_finish(self, owned_macros: dict, key_length: str = ""):
         self.key_btn.configure(state="normal")
         self.btn.configure(state="normal")
         codes = sorted(set(owned_macros.values()))
@@ -597,12 +616,15 @@ class LoginWindow(Draggable):
             "linked":       True,
             "owned_macros": owned_macros,
             "license_key":  codes[0] if codes else "",
+            "key_length":   key_length,
         }
         save_license(data)
         self.root.destroy()
         run_hub(data)
 
-    def _do_activate(self, code: str, session: str = None):
+    def _do_activate(self, code: str):
+        """The 'paste a key' box flow: links Discord (if not already) then
+        activates this one code against it."""
         import urllib.request, urllib.parse
 
         def post(url, data=None):
@@ -612,15 +634,6 @@ class LoginWindow(Draggable):
                 req.add_header("Content-Type", "application/x-www-form-urlencoded")
             with urllib.request.urlopen(req, timeout=12) as r:
                 return r.read().decode(errors="replace").strip()
-
-        # already linked (e.g. came from the Discord-login button) — skip straight to activate
-        if session is not None:
-            ok, result = self._raw_activate(code, session)
-            if ok:
-                self.root.after(0, lambda: self._activate_done(True, code=code, macro=result))
-            else:
-                self.root.after(0, lambda: self._activate_done(False, result))
-            return
 
         # ── step 1: ask the bot for a Discord-link session ──────────────────
         session = ""
@@ -748,8 +761,9 @@ class HubWindow(Draggable):
         self.root.resizable(False, False)
         self.root.configure(bg=ui.BG)
         self._center()
-        self.root.after(60, lambda: ui.round_window(self.root, HUB_W, HUB_H, 22))
+        self.root.after(60, lambda: ui.round_window(self.root, HUB_W, HUB_H, 28))
         self._build()
+        self._fetch_key_lengths()
 
         # heartbeat — checks server every 5 min; kills hub if revoked
         self._start_heartbeat()
@@ -758,6 +772,39 @@ class HubWindow(Draggable):
         self.root.update_idletasks()
         sw, sh = self.root.winfo_screenwidth(), self.root.winfo_screenheight()
         self.root.geometry(f"{HUB_W}x{HUB_H}+{(sw-HUB_W)//2}+{(sh-HUB_H)//2}")
+
+    # ── key length ─────────────────────────────────────────────────────────────
+    def _fetch_key_lengths(self):
+        """Asks the bot for each owned macro's length/expiry and fills the
+        KEY row on its panel — one request per macro since different macros
+        can be on different keys with different lengths."""
+        for m in self.owned_list:
+            code = self.owned_macros.get(m["id"])
+            if not code:
+                continue
+            threading.Thread(target=self._fetch_one_key_length,
+                             args=(m["id"], code), daemon=True).start()
+
+    def _fetch_one_key_length(self, mid: str, code: str):
+        try:
+            params = urllib.parse.urlencode({"code": code})
+            with urllib.request.urlopen(f"{BOT_BASE}/api/keyinfo?{params}", timeout=10) as r:
+                text = r.read().decode(errors="replace").strip()
+        except Exception:
+            text = ""
+        parts = text.split("|")
+        length = parts[2] if len(parts) > 2 and parts[0] == "OK" else ""
+        self.root.after(0, lambda: self._apply_key_length(mid, length))
+
+    def _apply_key_length(self, mid: str, length: str):
+        m = next((x for x in self.owned_list if x["id"] == mid), None)
+        if not m or "_keylen" not in m:
+            return
+        if length:
+            colour = ui.RED if length in ("Expired",) else ui.FG2
+            m["_keylen"].configure(text=length, fg=colour)
+        else:
+            m["_keylen"].configure(text="Unknown", fg=ui.MUTED)
 
     # ── heartbeat ──────────────────────────────────────────────────────────────
     def _start_heartbeat(self):
@@ -849,6 +896,18 @@ class HubWindow(Draggable):
 
         # bottom spacer so nothing sits inside the rounded bottom-left corner
         tk.Frame(sb, bg=ui.PANEL2, height=14).pack(fill="x", side="bottom")
+
+        # Discord support link (bottom, above the account-link icon)
+        support_btn = tk.Frame(sb, bg=ui.PANEL2, width=ui.SIDEBAR_W, height=ui.SIDEBAR_W)
+        support_btn.pack_propagate(False)
+        support_btn.pack(fill="x", side="bottom")
+        support_ico = tk.Label(support_btn, text="🎫", bg=ui.PANEL2, fg=ui.MUTED,
+                               font=ui.FONT_ICON, cursor="hand2")
+        support_ico.place(relx=0.5, rely=0.5, anchor="center")
+        support_btn.bind("<Button-1>", lambda e: webbrowser.open(DISCORD_URL))
+        support_ico.bind("<Button-1>", lambda e: webbrowser.open(DISCORD_URL))
+        support_ico.bind("<Enter>", lambda e: support_ico.configure(fg=ui.FG))
+        support_ico.bind("<Leave>", lambda e: support_ico.configure(fg=ui.MUTED))
 
         # Discord link sidebar icon (bottom)
         self._disc_btn = tk.Frame(sb, bg=ui.PANEL2,
@@ -1034,6 +1093,15 @@ class HubWindow(Draggable):
         m["_pid"] = tk.Label(sr, text="Not running", bg=ui.PANEL,
                               fg=ui.MUTED, font=("Segoe UI", 8))
         m["_pid"].pack(side="left", padx=10)
+
+        # ── key length row — filled in once /api/keyinfo answers ───────────
+        kyr = tk.Frame(body, bg=ui.PANEL)
+        kyr.pack(fill="x", pady=(6, 0))
+        tk.Label(kyr, text="KEY", bg=ui.PANEL, fg=ui.MUTED,
+                 font=("Segoe UI Semibold", 7)).pack(side="left")
+        m["_keylen"] = tk.Label(kyr, text="Checking…", bg=ui.PANEL,
+                                fg=ui.MUTED, font=("Segoe UI", 8))
+        m["_keylen"].pack(side="left", padx=10)
         return f
 
     # ── Discord link flow ──────────────────────────────────────────────────────

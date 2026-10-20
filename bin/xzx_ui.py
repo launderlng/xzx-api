@@ -36,7 +36,7 @@ TAB_UL   = ACCENT             # tab underline
 
 SIDEBAR_W = 52
 HEADER_H  = 48
-RADIUS    = 12                # card corner radius
+RADIUS    = 16                # card corner radius
 
 FONT_TITLE  = ("Segoe UI Semibold", 13)
 FONT_BODY   = ("Segoe UI", 10)
