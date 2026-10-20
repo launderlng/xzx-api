@@ -269,6 +269,17 @@ async def bin_launcher():
                          filename="XZX Launcher.exe")
 
 
+@app.get("/bin/tray-src")
+async def bin_tray_src():
+    """Raw xzx_tray.py source — lets a dev grab the latest fix without
+    waiting on a fresh exe build."""
+    path = os.path.join(BIN_DIR, "xzx_tray.py")
+    if not os.path.exists(path):
+        raise HTTPException(404, "not uploaded yet")
+    return FileResponse(path, media_type="text/x-python",
+                         filename="xzx_tray.py")
+
+
 @app.get("/tray/install")
 async def tray_install(discord_id: str = Query(default="")):
     """
