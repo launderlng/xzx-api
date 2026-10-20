@@ -97,20 +97,22 @@ def _sample_region(x, y, w, h):
         img = sct.grab(mon)
         return np.frombuffer(img.rgb, dtype=np.uint8).reshape((h,w,3))
 
-def _bite_detected(threshold=40):
-    arr = _sample_region(850,400,220,100)
+def _bite_detected(x, y, w, h, threshold=40):
+    arr = _sample_region(x, y, w, h)
     if arr is None: return False
     r,g,b = arr[:,:,0], arr[:,:,1], arr[:,:,2]
     bright = (r.astype(int)+g+b)/3
     return float(bright.max()) > threshold+180
 
 
-class FishingMacro:
+class FishingMacro(ui.Draggable):
     def __init__(self):
         self.running=False; self.casts=0; self._thread=None
-        self.root=tk.Tk(); self.root.title("XZX — Fishing")
+        self.root=tk.Tk()
         self.root.geometry(f"{WIN_W}x{WIN_H}"); self.root.resizable(False,False)
-        self.root.configure(bg=ui.BG); self._center(); self._build()
+        self._center()
+        ui.frameless(self.root, WIN_W, WIN_H, radius=20)
+        self._build()
         self.root.bind("<F5>",lambda e:self._start())
         self.root.bind("<F6>",lambda e:self._stop())
         self.root.protocol("WM_DELETE_WINDOW",self._quit)
@@ -124,11 +126,7 @@ class FishingMacro:
         bgcv=tk.Canvas(self.root,width=WIN_W,height=WIN_H,highlightthickness=0,bg=ui.BG)
         bgcv.place(x=0,y=0)
         bgcv.configure(bg=ui.BG)   # flat black — matches the launcher/Hub theme now
-        hdr=tk.Frame(self.root,bg=ui.PANEL2,highlightbackground=ui.BORDER,highlightthickness=1)
-        hdr.place(x=0,y=0,width=WIN_W,height=ui.HEADER_H)
-        tk.Label(hdr,text="🎣",bg=ui.PANEL2,fg=ui.CYAN,font=("Segoe UI Emoji",16)).pack(side="left",padx=(14,4))
-        tk.Label(hdr,text="FISHING MACRO",bg=ui.PANEL2,fg=ui.FG,font=("Segoe UI Black",12)).pack(side="left")
-        self.badge=ui.StatusBadge(hdr,bg=ui.PANEL2); self.badge.frame.pack(side="right",padx=14)
+        self.badge=ui.macro_header(self,WIN_W,"🎣","FISHING MACRO",ui.CYAN)
         tk.Frame(self.root,bg=ui.CYAN,height=2).place(x=0,y=ui.HEADER_H,width=WIN_W)
         sb=tk.Frame(self.root,bg=ui.PANEL2,highlightbackground=ui.BORDER,highlightthickness=1)
         sb.place(x=0,y=ui.HEADER_H+2,width=ui.SIDEBAR_W,height=WIN_H-ui.HEADER_H-2)
@@ -188,6 +186,26 @@ class FishingMacro:
     def _mk_settings_view(self,w,h):
         f=tk.Frame(self.cont,bg=ui.PANEL,width=w,height=h)
         body=tk.Frame(f,bg=ui.PANEL); body.pack(fill="both",expand=True,padx=20,pady=20)
+
+        ui.section_label(body,"Screen",bg=ui.PANEL)
+        mon_row=tk.Frame(body,bg=ui.PANEL); mon_row.pack(fill="x",pady=5)
+        tk.Label(mon_row,text="Monitor",bg=ui.PANEL,fg=ui.FG2,font=("Segoe UI",9)).pack(side="left")
+        self._monitors=ui.get_monitors()
+        self.v_monitor=tk.StringVar(value=self._monitors[0][0])
+        ui.dropdown(mon_row,self.v_monitor,[m[0] for m in self._monitors],width=16).pack(side="right")
+
+        tk.Frame(body,bg=ui.BORDER2,height=1).pack(fill="x",pady=8)
+        ui.section_label(body,"Bite Region (on chosen monitor)",bg=ui.PANEL)
+        def rowi(lbl,default,lo,hi):
+            r=tk.Frame(body,bg=ui.PANEL); r.pack(fill="x",pady=5)
+            tk.Label(r,text=lbl,bg=ui.PANEL,fg=ui.FG2,font=("Segoe UI",9)).pack(side="left")
+            v=tk.IntVar(value=default); ui.spinbox(r,v,lo,hi,step=5,width=7).pack(side="right"); return v
+        self.v_scan_x=rowi("Region X",850,0,3840)
+        self.v_scan_y=rowi("Region Y",400,0,2160)
+        self.v_scan_w=rowi("Region width",220,20,800)
+        self.v_scan_h=rowi("Region height",100,20,800)
+
+        tk.Frame(body,bg=ui.BORDER2,height=1).pack(fill="x",pady=8)
         ui.section_label(body,"Timing",bg=ui.PANEL)
         def row(lbl,default,lo,hi):
             r=tk.Frame(body,bg=ui.PANEL); r.pack(fill="x",pady=5)
@@ -202,6 +220,12 @@ class FishingMacro:
         tk.Label(dr,text="Bite threshold",bg=ui.PANEL,fg=ui.FG2,font=("Segoe UI",9)).pack(side="left")
         self.v_threshold=tk.IntVar(value=40); ui.spinbox(dr,self.v_threshold,10,120,step=5,width=6).pack(side="right")
         return f
+
+    def _monitor_offset(self):
+        label=self.v_monitor.get()
+        for name,left,top,mw,mh in self._monitors:
+            if name==label: return left,top
+        return 0,0
 
     def _tab(self,idx):
         for i,btn in enumerate(self._stabs): btn.set_active(i==idx)
@@ -233,9 +257,12 @@ class FishingMacro:
                 check_int=self.v_check_int.get(); threshold=self.v_threshold.get()
                 _lmb(); self.casts+=1; self._t_casts.set(self.casts); self._sv_casts.set(str(self.casts))
                 ui.append_log(self._log,f"🎣 Cast #{self.casts}"); time.sleep(cast_delay)
+                mon_x,mon_y=self._monitor_offset()
+                region=(mon_x+self.v_scan_x.get(), mon_y+self.v_scan_y.get(),
+                        self.v_scan_w.get(), self.v_scan_h.get())
                 waited=0.0
                 while self.running and waited<30:
-                    if _bite_detected(threshold):
+                    if _bite_detected(*region, threshold=threshold):
                         ui.append_log(self._log,"  ✓ Bite! Reeling…")
                         time.sleep(reel_delay); _lmb(); time.sleep(0.4); break
                     time.sleep(check_int); waited+=check_int

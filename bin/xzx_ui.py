@@ -76,6 +76,51 @@ def round_window(root: tk.Tk, w: int, h: int, radius: int = 22):
         pass
 
 
+class Draggable:
+    """Mixin for frameless (overrideredirect) windows: bind any widget so
+    dragging it moves self.root. Shared by the login window, the Hub, and
+    now every macro window too, so they all behave the same way."""
+    def _make_draggable(self, widget):
+        widget.bind("<ButtonPress-1>", self._drag_start)
+        widget.bind("<B1-Motion>",     self._drag_motion)
+    def _drag_start(self, e):
+        self._dx = e.x_root - self.root.winfo_x()
+        self._dy = e.y_root - self.root.winfo_y()
+    def _drag_motion(self, e):
+        self.root.geometry(f"+{e.x_root-self._dx}+{e.y_root-self._dy}")
+
+
+def frameless(root: tk.Tk, w: int, h: int, radius: int = 20, topmost: bool = True):
+    """Strip the OS title bar, clip to rounded corners, and pin the window
+    above everything else — the single chrome setup every XZX window
+    (login, Hub, and the three macros) now shares, instead of some windows
+    keeping the native Windows title bar and others not."""
+    root.overrideredirect(True)
+    root.configure(bg=BG)
+    if topmost:
+        try: root.attributes("-topmost", True)
+        except Exception: pass
+    root.after(60, lambda: round_window(root, w, h, radius))
+
+
+def get_monitors():
+    """List connected physical monitors as (label, left, top, width, height)
+    tuples, using mss (already an XZX dependency). Lets a macro's capture
+    region be pointed at whichever screen the game is actually on, instead
+    of always assuming the primary monitor."""
+    try:
+        import mss
+        with mss.mss() as sct:
+            mons = sct.monitors[1:]  # [0] is the combined virtual desktop
+        if not mons:
+            raise ValueError("no monitors reported")
+        return [(f"Monitor {i+1}  ({m['width']}x{m['height']})",
+                  m["left"], m["top"], m["width"], m["height"])
+                for i, m in enumerate(mons)]
+    except Exception:
+        return [("Monitor 1", 0, 0, 1920, 1080)]
+
+
 # ── gradient canvas helper ────────────────────────────────────────────────────
 def draw_gradient(canvas, w, h, c1=GRAD1, c2=GRAD3, steps=60, diagonal=False):
     """Fill canvas with a top→bottom (or diagonal) gradient."""
@@ -466,3 +511,41 @@ def section_label(parent, text, bg=PANEL):
     tk.Frame(f, bg=BORDER2, height=1).pack(side="left", fill="x",
                                            expand=True, padx=(8,0), pady=1)
     return f
+
+
+def macro_header(owner, w: int, icon: str, title: str, accent: str):
+    """Shared header for a frameless macro window: icon + title (both
+    draggable), a StatusBadge, and minimize/close controls — the exact
+    chrome the Hub uses, so a macro window looks and behaves like a child
+    of the Hub instead of a different app. `owner` must mix in Draggable
+    and expose `.root`; returns the StatusBadge for the caller to drive.
+    """
+    hdr = tk.Frame(owner.root, bg=PANEL2,
+                   highlightbackground=BORDER, highlightthickness=1)
+    hdr.place(x=0, y=0, width=w, height=HEADER_H)
+    owner._make_draggable(hdr)
+
+    ico = tk.Label(hdr, text=icon, bg=PANEL2, fg=accent, font=("Segoe UI Emoji", 16))
+    ico.pack(side="left", padx=(14, 4))
+    lbl = tk.Label(hdr, text=title, bg=PANEL2, fg=FG, font=("Segoe UI Black", 12))
+    lbl.pack(side="left")
+    owner._make_draggable(lbl)
+
+    ctrl = tk.Frame(hdr, bg=PANEL2)
+    ctrl.pack(side="right", padx=10)
+    badge = StatusBadge(ctrl, bg=PANEL2)
+    badge.frame.pack(side="left", padx=(0, 14))
+
+    mb = tk.Label(ctrl, text="─", bg=PANEL2, fg=MUTED, font=("Segoe UI", 12), cursor="hand2")
+    mb.pack(side="left", padx=(0, 10))
+    mb.bind("<Button-1>", lambda e: owner.root.iconify())
+    mb.bind("<Enter>", lambda e: mb.configure(fg=FG))
+    mb.bind("<Leave>", lambda e: mb.configure(fg=MUTED))
+
+    cb = tk.Label(ctrl, text="✕", bg=PANEL2, fg=MUTED, font=("Segoe UI", 12), cursor="hand2")
+    cb.pack(side="left")
+    cb.bind("<Button-1>", lambda e: owner._quit())
+    cb.bind("<Enter>", lambda e: cb.configure(fg=RED))
+    cb.bind("<Leave>", lambda e: cb.configure(fg=MUTED))
+
+    return badge

@@ -99,18 +99,17 @@ def _do_altclick(slide_px=5, hold_ms=80):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-class AltClickMacro:
+class AltClickMacro(ui.Draggable):
     def __init__(self):
         self.running = False
         self.clicks  = 0
         self._thread = None
 
         self.root = tk.Tk()
-        self.root.title("XZX — Alt Click")
         self.root.geometry(f"{WIN_W}x{WIN_H}")
         self.root.resizable(False, False)
-        self.root.configure(bg=ui.BG)
         self._center()
+        ui.frameless(self.root, WIN_W, WIN_H, radius=20)
         self._build()
         self.root.bind("<F9>", lambda e: self._toggle())
         self.root.protocol("WM_DELETE_WINDOW", self._quit)
@@ -127,15 +126,7 @@ class AltClickMacro:
         bgcv.configure(bg=ui.BG)   # flat black — matches the launcher/Hub theme now
 
         # header
-        hdr = tk.Frame(self.root, bg=ui.PANEL2,
-                       highlightbackground=ui.BORDER, highlightthickness=1)
-        hdr.place(x=0, y=0, width=WIN_W, height=ui.HEADER_H)
-        tk.Label(hdr, text="🖱️", bg=ui.PANEL2, fg=ui.GREEN,
-                 font=("Segoe UI Emoji", 16)).pack(side="left", padx=(14,4))
-        tk.Label(hdr, text="ALT CLICK MACRO", bg=ui.PANEL2, fg=ui.FG,
-                 font=("Segoe UI Black", 12)).pack(side="left")
-        self.badge = ui.StatusBadge(hdr, bg=ui.PANEL2)
-        self.badge.frame.pack(side="right", padx=14)
+        self.badge = ui.macro_header(self, WIN_W, "🖱️", "ALT CLICK MACRO", ui.GREEN)
 
         tk.Frame(self.root, bg=ui.GREEN, height=2).place(
             x=0, y=ui.HEADER_H, width=WIN_W)

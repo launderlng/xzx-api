@@ -246,6 +246,8 @@ class LoginWindow(Draggable):
         # when combined with a square window + a separately-rounded card)
         try: self.root.attributes("-alpha", 0.94)
         except Exception: pass
+        try: self.root.attributes("-topmost", True)
+        except Exception: pass
         self._build()
 
     def _center(self):
@@ -762,6 +764,8 @@ class HubWindow(Draggable):
         self.root.configure(bg=ui.BG)
         self._center()
         self.root.after(60, lambda: ui.round_window(self.root, HUB_W, HUB_H, 28))
+        try: self.root.attributes("-topmost", True)
+        except Exception: pass
         self._build()
         self._fetch_key_lengths()
 

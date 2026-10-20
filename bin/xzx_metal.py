@@ -94,18 +94,17 @@ def _press_e():
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-class MetalMacro:
+class MetalMacro(ui.Draggable):
     def __init__(self):
         self.running = False
         self.hits    = 0
         self._thread = None
 
         self.root = tk.Tk()
-        self.root.title("XZX — Metal Detector")
         self.root.geometry(f"{WIN_W}x{WIN_H}")
         self.root.resizable(False, False)
-        self.root.configure(bg=ui.BG)
         self._center()
+        ui.frameless(self.root, WIN_W, WIN_H, radius=20)
         self._build()
         self.root.bind("<F7>", lambda e: self._start())
         self.root.bind("<F8>", lambda e: self._stop())
@@ -123,15 +122,7 @@ class MetalMacro:
         bgcv.configure(bg=ui.BG)   # flat black — matches the launcher/Hub theme now
 
         # header
-        hdr = tk.Frame(self.root, bg=ui.PANEL2,
-                       highlightbackground=ui.BORDER, highlightthickness=1)
-        hdr.place(x=0, y=0, width=WIN_W, height=ui.HEADER_H)
-        tk.Label(hdr, text="🔍", bg=ui.PANEL2, fg=ui.ACCENT,
-                 font=("Segoe UI Emoji", 16)).pack(side="left", padx=(14,4))
-        tk.Label(hdr, text="METAL DETECTOR", bg=ui.PANEL2, fg=ui.FG,
-                 font=("Segoe UI Black", 12)).pack(side="left")
-        self.badge = ui.StatusBadge(hdr, bg=ui.PANEL2)
-        self.badge.frame.pack(side="right", padx=14)
+        self.badge = ui.macro_header(self, WIN_W, "🔍", "METAL DETECTOR", ui.ACCENT)
 
         tk.Frame(self.root, bg=ui.ACCENT, height=2).place(
             x=0, y=ui.HEADER_H, width=WIN_W)
@@ -234,7 +225,18 @@ class MetalMacro:
         f = tk.Frame(self.cont, bg=ui.PANEL, width=w, height=h)
         body = tk.Frame(f, bg=ui.PANEL)
         body.pack(fill="both", expand=True, padx=20, pady=20)
-        ui.section_label(body, "Scan Region", bg=ui.PANEL)
+
+        ui.section_label(body, "Screen", bg=ui.PANEL)
+        mon_row = tk.Frame(body, bg=ui.PANEL); mon_row.pack(fill="x", pady=5)
+        tk.Label(mon_row, text="Monitor", bg=ui.PANEL, fg=ui.FG2,
+                 font=("Segoe UI", 9)).pack(side="left")
+        self._monitors = ui.get_monitors()
+        self.v_monitor = tk.StringVar(value=self._monitors[0][0])
+        ui.dropdown(mon_row, self.v_monitor, [m[0] for m in self._monitors],
+                    width=16).pack(side="right")
+
+        tk.Frame(body, bg=ui.BORDER2, height=1).pack(fill="x", pady=8)
+        ui.section_label(body, "Scan Region (on chosen monitor)", bg=ui.PANEL)
 
         def row(lbl, default, lo, hi):
             r = tk.Frame(body, bg=ui.PANEL); r.pack(fill="x", pady=5)
@@ -263,6 +265,12 @@ class MetalMacro:
         self.v_g   = rowf("Target G", 220, 0, 255)
         self.v_b   = rowf("Target B",  50, 0, 255)
         return f
+
+    def _monitor_offset(self):
+        label = self.v_monitor.get()
+        for name, left, top, mw, mh in self._monitors:
+            if name == label: return left, top
+        return 0, 0
 
     def _tab(self, idx):
         for i, btn in enumerate(self._stabs): btn.set_active(i == idx)
@@ -296,8 +304,9 @@ class MetalMacro:
             try:
                 tol = self.v_tol.get()
                 tgt = (self.v_r.get(), self.v_g.get(), self.v_b.get())
-                sx  = self.v_scan_x.get()
-                sy  = self.v_scan_y.get()
+                mon_x, mon_y = self._monitor_offset()
+                sx  = mon_x + self.v_scan_x.get()
+                sy  = mon_y + self.v_scan_y.get()
                 px  = _get_pixel(sx, sy)
                 if _colour_match(px, tgt, tol):
                     _press_e()
