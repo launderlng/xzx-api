@@ -65,9 +65,89 @@ def init_db():
         created_at  TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_lic_discord ON licenses (discord_id, active);
+
+    CREATE TABLE IF NOT EXISTS tray_installs (
+        discord_id  TEXT PRIMARY KEY,
+        first_ip    TEXT NOT NULL,
+        last_ip     TEXT NOT NULL,
+        first_seen  TEXT NOT NULL,
+        last_seen   TEXT NOT NULL,
+        downloads   INTEGER NOT NULL DEFAULT 1
+    );
     """)
     con.commit()
     con.close()
+
+
+# ── install-link logging (webhook into the bot's key-log channel) ─────────────────
+DISCORD_LOG_WEBHOOK = os.getenv("DISCORD_LOG_WEBHOOK", "")
+
+def _post_webhook(content: str):
+    if not DISCORD_LOG_WEBHOOK:
+        return
+    try:
+        import urllib.request as _ur
+        req = _ur.Request(
+            DISCORD_LOG_WEBHOOK,
+            data=json.dumps({"content": content[:1990]}).encode(),
+            method="POST",
+        )
+        req.add_header("Content-Type", "application/json")
+        _ur.urlopen(req, timeout=8).read()
+    except Exception:
+        pass
+
+
+def _client_ip(request: Request) -> str:
+    fwd = request.headers.get("X-Forwarded-For", "")
+    if fwd:
+        return fwd.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
+def _log_install_download(discord_id: str, ip: str):
+    """Records who downloaded the installer and from what IP, posting to the
+    bot's log webhook — and flags (pings) it if the same Discord ID downloads
+    again from a DIFFERENT IP, which can mean the link got shared around."""
+    now_s = datetime.now(timezone.utc).isoformat()
+    con = get_db()
+    row = con.execute(
+        "SELECT * FROM tray_installs WHERE discord_id = ?", (discord_id,)
+    ).fetchone()
+    if row is None:
+        con.execute(
+            "INSERT INTO tray_installs (discord_id, first_ip, last_ip, first_seen, last_seen, downloads) "
+            "VALUES (?, ?, ?, ?, ?, 1)",
+            (discord_id, ip, ip, now_s, now_s),
+        )
+        con.commit()
+        con.close()
+        _post_webhook(
+            f"📥 **Install link downloaded**\n"
+            f"🆔 Discord `{discord_id}` · 🌐 IP `{ip}`\n"
+            f"First download for this account."
+        )
+        return
+
+    suspicious = ip != row["first_ip"]
+    con.execute(
+        "UPDATE tray_installs SET last_ip = ?, last_seen = ?, downloads = downloads + 1 WHERE discord_id = ?",
+        (ip, now_s, discord_id),
+    )
+    con.commit()
+    con.close()
+    if suspicious:
+        _post_webhook(
+            f"@here ⚠️ **Install link downloaded from a NEW IP**\n"
+            f"🆔 Discord `{discord_id}`\n"
+            f"🌐 First seen IP `{row['first_ip']}` · 🌐 New IP `{ip}`\n"
+            f"Possible link sharing — worth a look."
+        )
+    else:
+        _post_webhook(
+            f"📥 **Install link downloaded**\n"
+            f"🆔 Discord `{discord_id}` · 🌐 IP `{ip}` (download #{row['downloads'] + 1})"
+        )
 
 # ── helpers ───────────────────────────────────────────────────────────────────────
 def _make_launch_token(hwid: str, nonce: str) -> str:
@@ -281,7 +361,7 @@ async def bin_tray_src():
 
 
 @app.get("/tray/install")
-async def tray_install(discord_id: str = Query(default="")):
+async def tray_install(request: Request, discord_id: str = Query(default="")):
     """
     Serves a one-click .bat installer that:
     1. Downloads XZX Tray.exe and XZX Launcher.exe
@@ -290,9 +370,13 @@ async def tray_install(discord_id: str = Query(default="")):
     4. Runs the tray
     5. Deletes its own installer .bat file (normal installer cleanup —
        nothing else on the user's PC is touched or deleted)
+    Every download is logged (Discord ID + IP) to the key-log webhook, and
+    flagged if the same Discord ID downloads again from a different IP.
     """
     if not discord_id:
         raise HTTPException(400, "missing discord_id")
+
+    _log_install_download(discord_id, _client_ip(request))
 
     base = os.getenv("API_PUBLIC_URL", "https://api.xzxsuite.com")
 
