@@ -12,8 +12,8 @@ SECURITY:
   - Anti-tamper: if this file's hash changes, agent refuses to run
 """
 
-import sys, os, threading, time, json, hmac, hashlib, subprocess, tempfile
-import urllib.request, urllib.parse, webbrowser, struct, ctypes
+import sys, os, threading, time, json, hmac, hashlib, subprocess
+import urllib.request, urllib.parse, webbrowser
 from pathlib import Path
 
 # ── constants ───────────────────────────────────────────────────────────────────
@@ -320,15 +320,10 @@ def _run_tray():
         import pystray
         from PIL import Image, ImageDraw
 
-        # draw a simple purple XZX hex icon
+        # simple black/white XZX icon — matches the launcher's mono theme
         img = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
         d   = ImageDraw.Draw(img)
-        import math
-        cx, cy, r = 32, 32, 28
-        hex_pts = [(cx + r * math.cos(math.radians(60*i - 30)),
-                    cy + r * math.sin(math.radians(60*i - 30)))
-                   for i in range(6)]
-        d.polygon(hex_pts, fill="#5a0090", outline="#e040fb")
+        d.ellipse((2, 2, 62, 62), fill="#000000", outline="#ffffff", width=3)
         d.text((20, 20), "X", fill="#ffffff")
 
         def on_launch(icon, item):

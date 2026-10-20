@@ -1,5 +1,5 @@
 """
-XZX Metal Detector Macro — purple/pink CFX style
+XZX Metal Detector Macro — black-and-white detector style
 Auto skill-check for the FiveM metal detector minigame.
 """
 import tkinter as tk
@@ -120,8 +120,7 @@ class MetalMacro:
         bgcv = tk.Canvas(self.root, width=WIN_W, height=WIN_H,
                          highlightthickness=0, bg=ui.BG)
         bgcv.place(x=0, y=0)
-        self.root.after(10, lambda: ui.draw_gradient(
-            bgcv, WIN_W, WIN_H, ui.BG, "#200a42", steps=80))
+        bgcv.configure(bg=ui.BG)   # flat black — matches the launcher/Hub theme now
 
         # header
         hdr = tk.Frame(self.root, bg=ui.PANEL2,

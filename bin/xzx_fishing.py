@@ -1,5 +1,5 @@
 """
-XZX Fishing Macro — purple/pink CFX style
+XZX Fishing Macro — black-and-white detector style
 Auto-cast · reel · keep.
 """
 import tkinter as tk
@@ -123,7 +123,7 @@ class FishingMacro:
     def _build(self):
         bgcv=tk.Canvas(self.root,width=WIN_W,height=WIN_H,highlightthickness=0,bg=ui.BG)
         bgcv.place(x=0,y=0)
-        self.root.after(10,lambda:ui.draw_gradient(bgcv,WIN_W,WIN_H,ui.BG,"#1a0840",steps=80))
+        bgcv.configure(bg=ui.BG)   # flat black — matches the launcher/Hub theme now
         hdr=tk.Frame(self.root,bg=ui.PANEL2,highlightbackground=ui.BORDER,highlightthickness=1)
         hdr.place(x=0,y=0,width=WIN_W,height=ui.HEADER_H)
         tk.Label(hdr,text="🎣",bg=ui.PANEL2,fg=ui.CYAN,font=("Segoe UI Emoji",16)).pack(side="left",padx=(14,4))

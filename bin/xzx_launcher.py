@@ -1,21 +1,21 @@
 """
 XZX Launcher — Login + Hub
-Discord ID = your key. Must link Discord before macros unlock.
-No OS title bar. Purple/pink gradient style.
+Sign in with Discord (or paste a key) to unlock whichever macros that
+account has active keys for. No OS title bar. Black/white theme.
 
-ANTI-BYPASS HARDENING:
+ACCESS CONTROL (see the top-level safety note in the repo for what this
+deliberately does NOT do — no file deletion, no drive scanning):
   - HWID fingerprint locked to machine
-  - Server-side validation on every launch (no cached bypass)
-  - Env var token required by all macro processes
-  - Session token rotates each launch, macros die if missing
-  - File tampering detection (launcher checks its own hash)
-  - Anti-debug: exits if debugger detected
-  - Macros check env token every 60s, exit if revoked
+  - Server-side validation on every activation (no cached bypass)
+  - Env var session token required by all macro processes, checked once
+    at each macro's startup — not polled continuously
+  - Session token rotates each launcher run
+  - Anti-debug is disabled (see note below) — it was a false-positive
+    magnet on machines with antivirus/EDR software, not a real gate
 """
 import tkinter as tk
-import threading, subprocess, os, sys, json, hashlib, time, webbrowser, random, hmac, struct
-import urllib.parse, urllib.request, secrets
-from http.server import HTTPServer, BaseHTTPRequestHandler
+import threading, subprocess, os, sys, json, hashlib, time, webbrowser, random, hmac
+import urllib.parse, urllib.request
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
@@ -40,15 +40,6 @@ BOT_BASE      = os.getenv("XZX_BOT_BASE",
 API_ACTIVATE  = f"{BOT_BASE}/api/activate"
 KEY_PRODUCT   = "any"   # discover whichever macro a key is actually for, rather
                          # than guessing one — the server tells us in the response
-
-# ── Discord OAuth config ────────────────────────────────────────────────────────
-# Set DISCORD_CLIENT_ID to your bot/app's client ID.
-# The OAuth callback lands on localhost:47392 — register that as a redirect URI
-# in your Discord Developer Portal → OAuth2 → Redirects.
-DISCORD_CLIENT_ID  = os.getenv("XZX_DISCORD_CLIENT_ID", "1556620681083617340")
-OAUTH_REDIRECT_URI = "http://localhost:47392/callback"
-OAUTH_SCOPES       = "identify"
-OAUTH_PORT         = 47392
 
 # ── anti-debug ─────────────────────────────────────────────────────────────────
 # NOTE: disabled — IsDebuggerPresent() throws false positives on machines with

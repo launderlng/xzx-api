@@ -1,5 +1,5 @@
 """
-XZX Alt-Click Macro — purple/pink CFX style
+XZX Alt-Click Macro — black-and-white detector style
 Hold Alt → click down → slide right N px → click up → release Alt
 """
 import tkinter as tk
@@ -124,8 +124,7 @@ class AltClickMacro:
         bgcv = tk.Canvas(self.root, width=WIN_W, height=WIN_H,
                          highlightthickness=0, bg=ui.BG)
         bgcv.place(x=0, y=0)
-        self.root.after(10, lambda: ui.draw_gradient(
-            bgcv, WIN_W, WIN_H, ui.BG, "#0d1a00", steps=80))
+        bgcv.configure(bg=ui.BG)   # flat black — matches the launcher/Hub theme now
 
         # header
         hdr = tk.Frame(self.root, bg=ui.PANEL2,
