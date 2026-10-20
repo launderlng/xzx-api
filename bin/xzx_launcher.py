@@ -38,7 +38,8 @@ SECRET_SALT    = b"xzx_suite_2025_salt_noclone"
 BOT_BASE      = os.getenv("XZX_BOT_BASE",
                           "https://verification-bot-production-2ea4.up.railway.app")
 API_ACTIVATE  = f"{BOT_BASE}/api/activate"
-KEY_PRODUCT   = "metal"   # DEFAULT_MACRO on the bot; an "all macros" key passes for any product
+KEY_PRODUCT   = "any"   # discover whichever macro a key is actually for, rather
+                         # than guessing one — the server tells us in the response
 
 # ── Discord OAuth config ────────────────────────────────────────────────────────
 # Set DISCORD_CLIENT_ID to your bot/app's client ID.
@@ -218,6 +219,7 @@ MACROS = [
      "desc":"Hold-Alt auto-click macro with configurable CPS.",
      "keys":["F9 Toggle"]},
 ]
+MACRO_IDS = [m["id"] for m in MACROS]
 
 # ── drag mixin ──────────────────────────────────────────────────────────────────
 class Draggable:
@@ -238,6 +240,8 @@ class LoginWindow(Draggable):
     RADIUS = 22  # whole-window corner radius
 
     def __init__(self):
+        self._discord_id  = ""
+        self._discord_tag = ""
         self.root = tk.Tk()
         self.root.overrideredirect(True)
         self.root.geometry(f"{WIN_W}x{WIN_H}")
@@ -405,41 +409,26 @@ class LoginWindow(Draggable):
             self._setstatus(f"Previous session: {tag} — re-authorise to continue", ui.MUTED)
 
     def _draw_logo(self, cv, w, h):
-        import math
+        # No shape, no glow rings, no second layer behind it — just the
+        # wordmark sitting directly on the starfield canvas underneath it.
         cx, cy = w // 2, h // 2
-        # soft layered glow behind the hex (no inner clutter, one clean ring)
-        for glow_r, glow_col in [(48, "#0a2e2a"), (42, "#0f4a42"), (37, "#167a6c")]:
-            pts = []
-            for i in range(6):
-                a = math.radians(60 * i - 30)
-                pts += [cx + glow_r * math.cos(a), cy + glow_r * math.sin(a)]
-            cv.create_polygon(pts, outline=glow_col, fill="", width=2,
-                              smooth=False)
-        # solid hexagon body with a crisp accent outline
-        r = 33
-        pts = []
-        for i in range(6):
-            a = math.radians(60 * i - 30)
-            pts += [cx + r * math.cos(a), cy + r * math.sin(a)]
-        cv.create_polygon(pts, outline=ui.ACCENT, fill=ui.PANEL2, width=2)
-        # XZX wordmark, centred
         cv.create_text(cx, cy, text="XZX", fill=ui.FG,
-                       font=("Segoe UI Black", 17))
+                       font=("Segoe UI Black", 22))
 
     def _paint_bg(self):
-        # instrument-panel gradient: near-black up top fading into a deep
-        # teal-navy glow low in the card area — a console, not a nightclub
-        ui.draw_gradient(self.cv, WIN_W, WIN_H, "#060a10", "#0e2a30",
-                         steps=100)
-        self.cv.create_rectangle(0, 30, WIN_W, 32, fill=ui.ACCENT, outline="")
+        # one flat layer: pure black, nothing drawn under or behind it —
+        # the star particles (started in __init__) are the only other thing
+        # on this canvas, so there's never a second "panel" floating on top.
+        self.cv.configure(bg=ui.BG)
+        self.cv.create_rectangle(0, 30, WIN_W, 31, fill=ui.BORDER, outline="")
         self._draw_scanline()
 
     def _draw_scanline(self):
         """One orchestrated reveal moment: a signal sweep crosses the card
         once on open, tying back to what XZX actually sells (detection
         macros) instead of a generic fade-in."""
-        line = self.cv.create_line(0, 34, WIN_W, 34, fill=ui.ACCENT, width=2)
-        glow = self.cv.create_rectangle(0, 30, WIN_W, 38, fill=ui.ACCENT, outline="", stipple="gray25")
+        line = self.cv.create_line(0, 34, WIN_W, 34, fill=ui.ACCENT, width=1)
+        glow = self.cv.create_rectangle(0, 32, WIN_W, 36, fill=ui.ACCENT, outline="", stipple="gray12")
 
         def step(y=34):
             if y > WIN_H - 20:
@@ -507,6 +496,9 @@ class LoginWindow(Draggable):
                 status_resp = ""
             if status_resp.startswith("LINKED"):
                 linked = True
+                lparts = status_resp.split("|")
+                self._discord_tag = lparts[1] if len(lparts) > 1 else ""
+                self._discord_id  = lparts[2] if len(lparts) > 2 else ""
                 break
             if status_resp.startswith("ERROR") or status_resp == "EXPIRED":
                 reason = status_resp.split("|", 1)[-1] if "|" in status_resp else "Link expired"
@@ -529,9 +521,10 @@ class LoginWindow(Draggable):
             return
 
         if mk.startswith("OK|"):
-            code = mk.split("|", 1)[1].split(",")[0].strip()
-            self.root.after(0, lambda: self._setstatus("Key found — activating…", ui.MUTED))
-            self._do_activate(code, session=session)   # reuses the key-activate step
+            codes = [c.strip() for c in mk.split("|", 1)[1].split(",") if c.strip()]
+            self.root.after(0, lambda: self._setstatus(
+                f"Found {len(codes)} key(s) — activating…", ui.MUTED))
+            self._activate_all(codes, session)
         elif mk.startswith("DENIED|NO LICENSE"):
             self.root.after(0, lambda: self._oauth_done(
                 False, "No key found for this Discord account. Buy one or enter a key below."))
@@ -556,6 +549,68 @@ class LoginWindow(Draggable):
         self._setstatus("Checking key…", ui.MUTED)
         threading.Thread(target=self._do_activate, args=(code,), daemon=True).start()
 
+    def _raw_activate(self, code: str, session: str = "") -> tuple:
+        """POSTs /api/activate for one code and returns (ok, detail_or_macro).
+        product is always "any" — the server tells us which macro the key is
+        actually for ("all" for a key that works everywhere) instead of us
+        having to guess one up front."""
+        import urllib.request, urllib.parse
+        try:
+            payload = urllib.parse.urlencode({
+                "code": code, "product": KEY_PRODUCT, "hwid": HWID, "session": session,
+            }).encode()
+            req = urllib.request.Request(API_ACTIVATE, data=payload, method="POST")
+            req.add_header("Content-Type", "application/x-www-form-urlencoded")
+            with urllib.request.urlopen(req, timeout=12) as r:
+                text = r.read().decode(errors="replace").strip()
+        except Exception as exc:
+            return False, f"Server error: {exc}"
+        parts = text.split("|")
+        if parts[0] == "OK":
+            macro = parts[2] if len(parts) > 2 else "all"
+            return True, macro
+        return False, (parts[1] if len(parts) > 1 else "Key not accepted.")
+
+    def _activate_all(self, codes: list, session: str):
+        """Activates every key a linked Discord account owns, building up the
+        set of macros it unlocks (a plain key unlocks one; an 'all macros' key
+        unlocks every tab) — this is what makes the Hub show only what was
+        actually bought instead of guessing a single macro."""
+        owned = {}
+        last_error = "No key found for this Discord account. Buy one or enter a key below."
+        any_ok = False
+        for code in codes:
+            ok, result = self._raw_activate(code, session)
+            if ok:
+                any_ok = True
+                if result == "all":
+                    for mid in MACRO_IDS:
+                        owned[mid] = code
+                else:
+                    owned[result] = code
+            else:
+                last_error = result
+        if any_ok:
+            self.root.after(0, lambda: self._login_finish(owned))
+        else:
+            self.root.after(0, lambda: self._oauth_done(False, last_error))
+
+    def _login_finish(self, owned_macros: dict):
+        self.key_btn.configure(state="normal")
+        self.btn.configure(state="normal")
+        codes = sorted(set(owned_macros.values()))
+        data = {
+            "discord_id":   self._discord_id,
+            "username":     self._discord_tag or self._discord_id,
+            "tag":          self._discord_tag or self._discord_id,
+            "linked":       True,
+            "owned_macros": owned_macros,
+            "license_key":  codes[0] if codes else "",
+        }
+        save_license(data)
+        self.root.destroy()
+        run_hub(data)
+
     def _do_activate(self, code: str, session: str = None):
         import urllib.request, urllib.parse
 
@@ -569,20 +624,11 @@ class LoginWindow(Draggable):
 
         # already linked (e.g. came from the Discord-login button) — skip straight to activate
         if session is not None:
-            try:
-                payload = urllib.parse.urlencode({
-                    "code": code, "product": KEY_PRODUCT, "hwid": HWID, "session": session,
-                }).encode()
-                text = post(API_ACTIVATE, data=payload)
-            except Exception as exc:
-                self.root.after(0, lambda e=exc: self._activate_done(False, f"Server error: {e}"))
-                return
-            parts = text.split("|", 1)
-            if parts[0] == "OK":
-                self.root.after(0, lambda: self._activate_done(True, code=code))
+            ok, result = self._raw_activate(code, session)
+            if ok:
+                self.root.after(0, lambda: self._activate_done(True, code=code, macro=result))
             else:
-                detail = parts[1] if len(parts) > 1 else ""
-                self.root.after(0, lambda: self._activate_done(False, detail or "Key not accepted."))
+                self.root.after(0, lambda: self._activate_done(False, result))
             return
 
         # ── step 1: ask the bot for a Discord-link session ──────────────────
@@ -619,6 +665,9 @@ class LoginWindow(Draggable):
                     status_resp = ""
                 if status_resp.startswith("LINKED"):
                     linked = True
+                    lparts = status_resp.split("|")
+                    self._discord_tag = lparts[1] if len(lparts) > 1 else ""
+                    self._discord_id  = lparts[2] if len(lparts) > 2 else ""
                     break
                 if status_resp.startswith("ERROR") or status_resp == "EXPIRED":
                     reason = status_resp.split("|", 1)[-1] if "|" in status_resp else "Link expired"
@@ -633,64 +682,52 @@ class LoginWindow(Draggable):
                 "Linked! Activating your key…", ui.MUTED))
 
         # ── step 3: activate the key against the (now linked) session ───────
-        try:
-            payload = urllib.parse.urlencode({
-                "code": code, "product": KEY_PRODUCT, "hwid": HWID,
-                "session": session,
-            }).encode()
-            text = post(API_ACTIVATE, data=payload)
-        except Exception as exc:
-            self.root.after(0, lambda e=exc: self._activate_done(
-                False, f"Server error: {e}"))
-            return
-
-        parts = text.split("|", 1)
-        status = parts[0] if parts else ""
-        detail = parts[1] if len(parts) > 1 else ""
-
-        if status == "OK":
-            self.root.after(0, lambda: self._activate_done(True, code=code))
+        ok, result = self._raw_activate(code, session)
+        if ok:
+            self.root.after(0, lambda: self._activate_done(True, code=code, macro=result))
         else:
-            self.root.after(0, lambda: self._activate_done(
-                False, detail or "Key not accepted."))
+            self.root.after(0, lambda: self._activate_done(False, result))
 
-    def _activate_done(self, ok: bool, message: str = "", code: str = ""):
+    def _activate_done(self, ok: bool, message: str = "", code: str = "", macro: str = ""):
         self.key_btn.configure(state="normal")
         self.btn.configure(state="normal")
         if not ok:
             self._setstatus(f"❌  {message}", ui.RED)
             return
-        data = {
-            "discord_id": "",
-            "username":   code,
-            "tag":        code,
-            "linked":     True,
-            "macros":     [],
-            "license_key": code,
-        }
-        save_license(data)
-        self.root.destroy()
-        run_hub(data)
+        owned = {mid: code for mid in MACRO_IDS} if macro == "all" else {macro: code}
+        self._login_finish(owned)
 
     def _init_pts(self):
-        for _ in range(22):
-            self._pts.append({"x": random.randint(0,WIN_W),
-                               "y": random.randint(0,WIN_H),
-                               "dx": random.uniform(-0.3,0.3),
-                               "dy": random.uniform(-0.5,-0.1),
-                               "r":  random.randint(1,2), "id": None})
+        # a static starfield, not drifting embers — real stars don't all
+        # float upward together. Mix of sizes/brightness gives it depth
+        # without needing a second drawn layer or a redraw loop.
+        shades = [ui.MUTED, ui.FG2, ui.FG, ui.FG]  # weighted toward brighter
+        for _ in range(70):
+            self._pts.append({"x": random.randint(0, WIN_W),
+                               "y": random.randint(0, WIN_H),
+                               "r": random.choice([1, 1, 1, 2]),
+                               "shade": random.choice(shades), "id": None})
 
     def _anim_pts(self):
         for p in self._pts:
-            if p["id"]: self.cv.delete(p["id"])
-            p["x"] += p["dx"]; p["y"] += p["dy"]
-            if p["y"] < -4:
-                p["y"] = WIN_H+4; p["x"] = random.randint(0,WIN_W)
             p["id"] = self.cv.create_oval(
                 p["x"]-p["r"], p["y"]-p["r"],
                 p["x"]+p["r"], p["y"]+p["r"],
-                fill=ui.BORDER, outline="")
-        self.root.after(35, self._anim_pts)
+                fill=p["shade"], outline="")
+        # a handful twinkle very slowly — the only motion here besides the
+        # one-shot scanline, so it reads as a sky, not a particle effect
+        self.root.after(1800, self._twinkle)
+
+    def _twinkle(self):
+        if not self._pts:
+            return
+        p = random.choice(self._pts)
+        p["shade"] = random.choice([ui.MUTED, ui.FG2, ui.FG, ui.FG])
+        if p["id"]: self.cv.delete(p["id"])
+        p["id"] = self.cv.create_oval(p["x"]-p["r"], p["y"]-p["r"],
+                            p["x"]+p["r"], p["y"]+p["r"],
+                            fill=p["shade"], outline="")
+        self.root.after(1800, self._twinkle)
 
     def run(self): self.root.mainloop()
 
@@ -705,6 +742,10 @@ class HubWindow(Draggable):
         self.procs   = {}
         self.linked  = lic.get("linked", False)
         self._discord_id = lic.get("discord_id", "")
+        # only the macros an active key actually covers — never show a tab
+        # for something the account hasn't bought
+        self.owned_macros = lic.get("owned_macros") or {}
+        self.owned_list = [m for m in MACROS if m["id"] in self.owned_macros] or MACROS
 
         # ── generate session token (also sent to child procs) ─────────────
         global SESSION_TOKEN
@@ -755,11 +796,10 @@ class HubWindow(Draggable):
 
     # ── build ──────────────────────────────────────────────────────────────────
     def _build(self):
+        # one flat black layer — no gradient, nothing floating behind it
         bgcv = tk.Canvas(self.root, width=HUB_W, height=HUB_H,
                          highlightthickness=0, bg=ui.BG)
         bgcv.place(x=0, y=0)
-        self.root.after(10, lambda: ui.draw_gradient(
-            bgcv, HUB_W, HUB_H, ui.BG, "#280a3e", steps=80))
 
         # ── custom title bar ──────────────────────────────────────────────
         bar = tk.Frame(self.root, bg=ui.PANEL2,
@@ -807,7 +847,7 @@ class HubWindow(Draggable):
         tk.Frame(sb, bg=ui.BORDER, height=1).pack(fill="x")
 
         self._sbtns = {}
-        for m in MACROS:
+        for m in self.owned_list:
             btn = ui.SideIconBtn(sb, m["icon"], m["name"],
                                   active_color=m["color"])
             btn.frame.pack(fill="x")
@@ -841,7 +881,7 @@ class HubWindow(Draggable):
         self.cont.place(x=cx, y=SB_Y, width=cw, height=ch)
 
         self._panels = {}
-        for m in MACROS:
+        for m in self.owned_list:
             self._panels[m["id"]] = self._mk_panel(m, cw, ch)
         self._link_panel = self._mk_link_panel(cw, ch)
 
@@ -852,30 +892,14 @@ class HubWindow(Draggable):
             self._show_link_prompt()
 
     def _draw_logo_bar(self, cv):
-        import math
-        cx, cy = 14, 14
-        r = 10
-        pts = []
-        for i in range(6):
-            a = math.radians(60*i-30)
-            pts += [cx+r*math.cos(a), cy+r*math.sin(a)]
-        cv.create_polygon(pts, outline=ui.ACCENT, fill=ui.PANEL2, width=1)
-        cv.create_text(cx+1, cy, text="X", fill=ui.FG,
-                       font=("Segoe UI Black", 7))
-        cv.create_text(36, cy, text="XZX LAUNCHER", fill=ui.FG,
+        cy = 14
+        cv.create_text(22, cy, text="XZX LAUNCHER", fill=ui.FG,
                        font=("Segoe UI Black", 8), anchor="w")
 
     def _draw_logo_sidebar(self, cv):
-        import math
         cx, cy = ui.SIDEBAR_W//2, 30
-        r = 18
-        pts = []
-        for i in range(6):
-            a = math.radians(60*i-30)
-            pts += [cx+r*math.cos(a), cy+r*math.sin(a)]
-        cv.create_polygon(pts, outline=ui.ACCENT, fill=ui.PANEL2, width=2)
         cv.create_text(cx, cy, text="XZX", fill=ui.FG,
-                       font=("Segoe UI Black", 8))
+                       font=("Segoe UI Black", 10))
 
     # ── Discord link panel ─────────────────────────────────────────────────────
     def _mk_link_panel(self, w, h):
@@ -912,8 +936,8 @@ class HubWindow(Draggable):
                  ).pack(pady=(0,20))
 
         btn = tk.Button(body, text="  🔗   Link Discord Account  ",
-                        bg=ui.ACCENT2, fg="white",
-                        activebackground=ui.ACCENT, activeforeground="white",
+                        bg=ui.ACCENT2, fg=ui.BG,
+                        activebackground=ui.ACCENT, activeforeground=ui.BG,
                         relief="flat", font=("Segoe UI Black", 11),
                         cursor="hand2", pady=13,
                         command=self._link_discord)
@@ -987,10 +1011,12 @@ class HubWindow(Draggable):
         tk.Frame(body, bg=ui.BORDER2, height=1).pack(fill="x", pady=(0,16))
 
         # ── big LAUNCH button ─────────────────────────────────────────────
-        fg_col = ui.BG if m["color"] in (ui.CYAN, ui.GREEN) else "white"
+        # every macro accent colour is light now (white/grey/green) — black
+        # text reads on all of them, unlike the old mixed light/dark palette
+        fg_col = ui.BG
         lb = tk.Button(body, text=f"▶   LAUNCH  {m['name'].upper()}",
                        bg=m["color"], fg=fg_col,
-                       activebackground=ui.ACCENT, activeforeground="white",
+                       activebackground=ui.ACCENT, activeforeground=ui.BG,
                        relief="flat", font=("Segoe UI Black", 12),
                        cursor="hand2", pady=14,
                        command=lambda mid=m["id"]: self._launch(mid))

@@ -1,0 +1,468 @@
+"""
+XZX shared UI — v5  (mono theme: true black/white, one layer, no colour noise)
+"""
+import tkinter as tk
+import os, sys
+
+# ── palette ───────────────────────────────────────────────────────────────────
+# Theme: flat black and white — no navy, no cyan, no gradient-as-decoration.
+# Structure (borders, weight, spacing) carries the hierarchy instead of colour.
+# Status still needs to be legible at a glance (running vs stopped, success vs
+# error), so green/red survive purely as state signals, never as decoration.
+BG       = "#000000"          # true black
+GRAD1    = "#000000"
+GRAD2    = "#0a0a0a"
+GRAD3    = "#000000"          # no real gradient — background is one flat layer
+PANEL    = "#0c0c0c"
+PANEL2   = "#000000"
+PANEL3   = "#161616"
+ACCENT   = "#ffffff"          # pure white — the one "bold" colour is no colour at all
+ACCENT2  = "#d9d9d9"
+ACCENT3  = "#4d4d4d"
+FG       = "#ffffff"
+FG2      = "#c2c2c2"
+MUTED    = "#6b6b6b"
+BORDER   = "#262626"
+BORDER2  = "#1a1a1a"
+GREEN    = "#3ddc74"
+GREEN2   = "#27b65c"
+RED      = "#ff4d5e"
+RED2     = "#e0313f"
+CYAN     = "#b3b3b3"          # second macro accent — light grey, distinct from pure white
+ORANGE   = "#ffffff"
+YELLOW   = "#ffffff"
+PINK     = "#ffffff"
+TAB_UL   = ACCENT             # tab underline
+
+SIDEBAR_W = 52
+HEADER_H  = 48
+RADIUS    = 12                # card corner radius
+
+FONT_TITLE  = ("Segoe UI Semibold", 13)
+FONT_BODY   = ("Segoe UI", 10)
+FONT_SMALL  = ("Segoe UI", 9)
+FONT_MICRO  = ("Segoe UI", 8)
+FONT_MONO   = ("Consolas", 9)
+FONT_BADGE  = ("Segoe UI Black", 20)
+FONT_LABEL  = ("Segoe UI", 7)
+FONT_ICON   = ("Segoe UI Emoji", 15)
+FONT_H1     = ("Segoe UI Black", 24)
+FONT_H2     = ("Segoe UI Black", 18)
+
+
+def apply_theme(root: tk.Tk):
+    root.configure(bg=BG)
+    try: root.tk.call("tk", "scaling", 1.0)
+    except Exception: pass
+
+
+def round_window(root: tk.Tk, w: int, h: int, radius: int = 22):
+    """
+    Clip a borderless Tk window (overrideredirect) to real rounded
+    corners using the Windows GDI region API, so the desktop shows
+    through cleanly at the corners instead of a square edge with a
+    rounded panel floating inside it. No-op on non-Windows.
+    """
+    try:
+        import ctypes
+        root.update()  # force the native window to exist before we grab its handle
+        hwnd = ctypes.windll.user32.GetParent(root.winfo_id())
+        if not hwnd:
+            hwnd = root.winfo_id()
+        hrgn = ctypes.windll.gdi32.CreateRoundRectRgn(
+            0, 0, w + 1, h + 1, radius, radius)
+        ctypes.windll.user32.SetWindowRgn(hwnd, hrgn, True)
+    except Exception:
+        pass
+
+
+# ── gradient canvas helper ────────────────────────────────────────────────────
+def draw_gradient(canvas, w, h, c1=GRAD1, c2=GRAD3, steps=60, diagonal=False):
+    """Fill canvas with a top→bottom (or diagonal) gradient."""
+    r1,g1,b1 = canvas.winfo_rgb(c1)
+    r2,g2,b2 = canvas.winfo_rgb(c2)
+    for i in range(steps):
+        t  = i / steps
+        r  = int(r1 + (r2-r1)*t) >> 8
+        g  = int(g1 + (g2-g1)*t) >> 8
+        b  = int(b1 + (b2-b1)*t) >> 8
+        col = f"#{r:02x}{g:02x}{b:02x}"
+        if diagonal:
+            # thin diagonal band — approximate with overlapping parallelograms
+            off = int(w * i / steps)
+            canvas.create_polygon(
+                -w+off, 0, w, 0, w, h, -w+off, h,
+                fill=col, outline="")
+        else:
+            y0  = int(h * i / steps)
+            y1  = int(h * (i+1) / steps) + 1
+            canvas.create_rectangle(0, y0, w, y1, fill=col, outline="")
+
+
+def _rounded_pts(x0, y0, x1, y1, r):
+    """Point list for a rounded-rectangle polygon (smooth=True)."""
+    r = min(r, (x1-x0)/2, (y1-y0)/2)
+    return [
+        x0+r, y0,   x1-r, y0,   x1, y0,   x1, y0+r,
+        x1, y1-r,   x1, y1,     x1-r, y1, x0+r, y1,
+        x0, y1,     x0, y1-r,   x0, y0+r, x0, y0,
+    ]
+
+
+def round_rect(canvas, x0, y0, x1, y1, r=14, **kw):
+    """Draw a smooth rounded rectangle on a canvas."""
+    return canvas.create_polygon(_rounded_pts(x0, y0, x1, y1, r),
+                                  smooth=True, splinesteps=24, **kw)
+
+
+def round_gradient_card(canvas, x0, y0, x1, y1, c1, c2, r=16, steps=40,
+                         outline="", outline_width=0):
+    """Rounded rectangle filled with a vertical gradient, via clipped bands."""
+    w, h = x1 - x0, y1 - y0
+    r1,g1,b1 = canvas.winfo_rgb(c1)
+    r2,g2,b2 = canvas.winfo_rgb(c2)
+    # paint the gradient, then mask the four corners back to the parent bg
+    for i in range(steps):
+        t  = i / steps
+        rr = int(r1 + (r2-r1)*t) >> 8
+        gg = int(g1 + (g2-g1)*t) >> 8
+        bb = int(b1 + (b2-b1)*t) >> 8
+        col = f"#{rr:02x}{gg:02x}{bb:02x}"
+        yy0 = y0 + h * i / steps
+        yy1 = y0 + h * (i+1) / steps + 1
+        canvas.create_rectangle(x0, yy0, x1, yy1, fill=col, outline="")
+    bg = canvas["bg"]
+    cr = r
+    # corner masks (quarter squares outside the rounded silhouette)
+    canvas.create_rectangle(x0, y0, x0+cr, y0+cr, fill=bg, outline="")
+    canvas.create_rectangle(x1-cr, y0, x1, y0+cr, fill=bg, outline="")
+    canvas.create_rectangle(x0, y1-cr, x0+cr, y1, fill=bg, outline="")
+    canvas.create_rectangle(x1-cr, y1-cr, x1, y1, fill=bg, outline="")
+    canvas.create_arc(x0, y0, x0+2*cr, y0+2*cr, start=90, extent=90,
+                       style="pieslice", fill=col, outline="")
+    canvas.create_arc(x1-2*cr, y0, x1, y0+2*cr, start=0, extent=90,
+                       style="pieslice", fill=col, outline="")
+    canvas.create_arc(x0, y1-2*cr, x0+2*cr, y1, start=180, extent=90,
+                       style="pieslice", fill=col, outline="")
+    canvas.create_arc(x1-2*cr, y1-2*cr, x1, y1, start=270, extent=90,
+                       style="pieslice", fill=col, outline="")
+    if outline_width:
+        round_rect(canvas, x0, y0, x1, y1, r, fill="", outline=outline,
+                    width=outline_width)
+
+
+def soft_shadow(canvas, x0, y0, x1, y1, r=16, layers=6, colour="#000000"):
+    """Cheap drop-shadow: a few descending, expanding, faded rounded rects."""
+    base = canvas.winfo_rgb(canvas["bg"])
+    sr, sg, sb = [c >> 8 for c in canvas.winfo_rgb(colour)]
+    br, bg_, bb = [c >> 8 for c in base]
+    for i in range(layers, 0, -1):
+        t = i / layers
+        rr = int(br + (sr-br)*0.35*t)
+        gg = int(bg_ + (sg-bg_)*0.35*t)
+        bb2 = int(bb + (sb-bb)*0.35*t)
+        col = f"#{rr:02x}{gg:02x}{bb2:02x}"
+        pad = i * 1.4
+        round_rect(canvas, x0-pad, y0-pad+i*1.6, x1+pad, y1+pad+i*1.6,
+                   r+pad, fill=col, outline="")
+
+
+# ── card frame with gradient bg ───────────────────────────────────────────────
+class GradCard(tk.Frame):
+    """A frame that paints a gradient canvas behind its children."""
+    def __init__(self, parent, w, h, c1=GRAD1, c2=GRAD3, radius=RADIUS, **kw):
+        super().__init__(parent, bg=BG, width=w, height=h, **kw)
+        self.pack_propagate(False)
+        self._cv = tk.Canvas(self, width=w, height=h,
+                             highlightthickness=1,
+                             highlightbackground=BORDER,
+                             bg=GRAD1)
+        self._cv.place(x=0, y=0)
+        self.bind("<Map>", lambda e: self._paint(w, h, c1, c2))
+
+    def _paint(self, w, h, c1, c2):
+        draw_gradient(self._cv, w, h, c1, c2)
+
+    def canvas(self): return self._cv
+
+
+# ── simple label helpers ──────────────────────────────────────────────────────
+def label(parent, text, fg=FG2, font=FONT_BODY, bg=None, **kw):
+    b = bg if bg is not None else parent["bg"]
+    return tk.Label(parent, text=text, bg=b, fg=fg, font=font, **kw)
+
+def heading(parent, text, **kw):  return label(parent, text, font=FONT_TITLE, **kw)
+def muted(parent, text, **kw):    return label(parent, text, fg=MUTED, font=FONT_SMALL, **kw)
+
+
+# ── icon sidebar button ───────────────────────────────────────────────────────
+class SideIconBtn:
+    def __init__(self, parent, icon, tooltip, active_color=ACCENT):
+        self.active_color = active_color
+        self.active = False
+        self.frame = tk.Frame(parent, bg=PANEL2, width=SIDEBAR_W, height=SIDEBAR_W)
+        self.frame.pack_propagate(False)
+        self.lbl = tk.Label(self.frame, text=icon, bg=PANEL2, fg=MUTED,
+                            font=FONT_ICON, cursor="hand2")
+        self.lbl.place(relx=0.5, rely=0.5, anchor="center")
+        # left active bar
+        self.bar = tk.Frame(self.frame, bg=PANEL2, width=3)
+        self.bar.place(x=0, y=0, relheight=1)
+
+    def set_active(self, v):
+        self.active = v
+        self.lbl.configure(fg=self.active_color if v else MUTED)
+        self.bar.configure(bg=self.active_color if v else PANEL2)
+        self.frame.configure(bg=PANEL if v else PANEL2)
+        self.lbl.configure(bg=PANEL if v else PANEL2)
+
+    def bind(self, seq, cb):
+        self.frame.bind(seq, cb)
+        self.lbl.bind(seq, cb)
+
+
+# ── tab bar ───────────────────────────────────────────────────────────────────
+class TabBar:
+    def __init__(self, parent, tabs: list, on_change, bg=PANEL):
+        self.frame = tk.Frame(parent, bg=bg)
+        self._btns = []
+        self._on   = on_change
+        self._sel  = 0
+        for i, name in enumerate(tabs):
+            b = tk.Label(self.frame, text=name, bg=bg, fg=MUTED,
+                         font=("Segoe UI Semibold", 10), cursor="hand2",
+                         padx=16, pady=8)
+            b.pack(side="left")
+            b.bind("<Button-1>", lambda e, idx=i: self._click(idx))
+            # underline canvas
+            ul = tk.Canvas(self.frame, width=b.winfo_reqwidth(), height=2,
+                           bg=bg, highlightthickness=0)
+            # packed below via place after render
+            self._btns.append((b, ul))
+        self.frame.after(50, lambda: self._select(0))
+
+    def _click(self, idx):
+        self._select(idx)
+        self._on(idx)
+
+    def _select(self, idx):
+        self._sel = idx
+        for i, (b, ul) in enumerate(self._btns):
+            active = i == idx
+            b.configure(fg=FG if active else MUTED)
+            # draw/clear underline
+            bx = b.winfo_x()
+            bw = b.winfo_width()
+            ul.configure(width=max(bw,1))
+            ul.place(x=bx, y=b.winfo_y() + b.winfo_height() - 2)
+            ul.delete("all")
+            if active:
+                ul.create_rectangle(0, 0, bw, 2, fill=ACCENT, outline="")
+
+
+# ── stat tile ─────────────────────────────────────────────────────────────────
+class StatTile:
+    def __init__(self, parent, name, value="0", accent=ACCENT, bg=PANEL):
+        self.frame = tk.Frame(parent, bg=bg,
+                              highlightbackground=BORDER2, highlightthickness=1)
+        tk.Frame(self.frame, bg=accent, height=2).pack(fill="x")
+        inn = tk.Frame(self.frame, bg=bg)
+        inn.pack(fill="both", expand=True, padx=12, pady=8)
+        self.var = tk.StringVar(value=value)
+        tk.Label(inn, textvariable=self.var, bg=bg, fg=FG,
+                 font=FONT_BADGE).pack(anchor="w")
+        tk.Label(inn, text=name, bg=bg, fg=MUTED,
+                 font=FONT_LABEL).pack(anchor="w")
+
+    def set(self, v): self.var.set(str(v))
+
+
+# ── rounded pill button (canvas-drawn, matches the rounded-window theme) ───────
+class RoundButton:
+    def __init__(self, parent, text, command, w=300, h=46, r=12,
+                 bg=ACCENT2, hover=ACCENT, fg=BG, disabled_bg=None,
+                 font=("Segoe UI Black", 11), parent_bg=None):
+        pbg = parent_bg if parent_bg is not None else parent["bg"]
+        self.cv = tk.Canvas(parent, width=w, height=h, bg=pbg,
+                            highlightthickness=0, cursor="hand2")
+        self.w, self.h, self.r = w, h, r
+        self.bg, self.hover, self.fg, self.font = bg, hover, fg, font
+        self.disabled_bg = disabled_bg or MUTED
+        self.text = text
+        self._enabled = True
+        self._draw(bg)
+        self.cv.bind("<Button-1>", lambda e: self._click())
+        self.cv.bind("<Enter>",    lambda e: self._enabled and self._draw(hover))
+        self.cv.bind("<Leave>",    lambda e: self._enabled and self._draw(bg))
+        self._command = command
+
+    def _click(self):
+        if self._enabled:
+            self._command()
+
+    def _draw(self, colour):
+        self.cv.delete("all")
+        round_rect(self.cv, 1, 1, self.w - 1, self.h - 1, self.r,
+                   fill=colour, outline="")
+        self.cv.create_text(self.w / 2, self.h / 2, text=self.text,
+                            fill=self.fg, font=self.font)
+
+    def configure(self, state=None, **kw):
+        if state == "disabled":
+            self._enabled = False
+            self.cv.configure(cursor="arrow")
+            self._draw(self.disabled_bg)
+        elif state == "normal":
+            self._enabled = True
+            self.cv.configure(cursor="hand2")
+            self._draw(self.bg)
+
+    def pack(self, **kw):  self.cv.pack(**kw)
+    def place(self, **kw): self.cv.place(**kw)
+    def grid(self, **kw):  self.cv.grid(**kw)
+
+
+# ── toggle button ─────────────────────────────────────────────────────────────
+class ToggleButton:
+    def __init__(self, parent, on_toggle,
+                 start_label="▶  START", stop_label="■  STOP",
+                 start_bg=ACCENT2, stop_bg=RED):
+        self._running = False
+        self._cb = on_toggle
+        self._sl = start_label; self._el = stop_label
+        self._sbg = start_bg;   self._ebg = stop_bg
+        self.btn = tk.Button(parent, text=start_label,
+                             bg=start_bg, fg=BG,
+                             activebackground=ACCENT, activeforeground=BG,
+                             relief="flat", font=("Segoe UI Black", 11),
+                             cursor="hand2", pady=10, command=self._click)
+
+    def _click(self):
+        self._running = not self._running
+        if self._running:
+            self.btn.configure(text=self._el, bg=self._ebg, fg="white",
+                               activebackground=RED2, activeforeground="white")
+        else:
+            self.btn.configure(text=self._sl, bg=self._sbg, fg=BG,
+                               activebackground=ACCENT, activeforeground=BG)
+        self._cb(self._running)
+
+    def force_stop(self):
+        if self._running:
+            self._running = False
+            self.btn.configure(text=self._sl, bg=self._sbg, fg=BG,
+                               activebackground=ACCENT, activeforeground=BG)
+
+
+# ── status badge ──────────────────────────────────────────────────────────────
+class StatusBadge:
+    def __init__(self, parent, bg=None):
+        b = bg or parent["bg"]
+        self.frame = tk.Frame(parent, bg=b)
+        self._dot = tk.Label(self.frame, text="●", bg=b, fg=MUTED,
+                             font=("Segoe UI", 9))
+        self._dot.pack(side="left")
+        self._lbl = tk.Label(self.frame, text="Stopped", bg=b,
+                             fg=MUTED, font=FONT_MICRO)
+        self._lbl.pack(side="left", padx=(2,0))
+
+    def set(self, text, colour=MUTED):
+        self._dot.configure(fg=colour)
+        self._lbl.configure(text=text, fg=colour)
+
+
+# ── spinner ───────────────────────────────────────────────────────────────────
+class Spinner:
+    FRAMES = ["⠋","⠙","⠸","⠼","⠴","⠦","⠇","⠏"]
+    def __init__(self, label):
+        self.lbl=label; self._i=0; self._on=False
+    def start(self, text=""):
+        self._text=text; self._on=True; self._tick()
+    def stop(self):
+        self._on=False; self.lbl.configure(text="")
+    def _tick(self):
+        if not self._on: return
+        self.lbl.configure(
+            text=f"{self.FRAMES[self._i%len(self.FRAMES)]}  {self._text}")
+        self._i+=1; self.lbl.after(80, self._tick)
+
+
+# ── log box ───────────────────────────────────────────────────────────────────
+def log_box(parent, height=12, bg=PANEL2):
+    t = tk.Text(parent, height=height, bg=bg, fg=FG2, relief="flat",
+                font=FONT_MONO, state="disabled", wrap="word",
+                insertbackground=FG, selectbackground=ACCENT2,
+                highlightthickness=0, padx=8, pady=6)
+    sb = tk.Scrollbar(parent, command=t.yview, bg=PANEL2,
+                      troughcolor=PANEL, activebackground=ACCENT2,
+                      relief="flat", width=6)
+    t.configure(yscrollcommand=sb.set)
+    return t, sb
+
+def append_log(box, line, max_lines=400):
+    box.configure(state="normal")
+    box.insert("end", line+"\n")
+    lines = int(box.index("end-1c").split(".")[0])
+    if lines > max_lines:
+        box.delete("1.0", f"{lines-max_lines}.0")
+    box.see("end")
+    box.configure(state="disabled")
+
+
+# ── form widgets ──────────────────────────────────────────────────────────────
+def accent_btn(parent, text, cmd, bg=ACCENT2, fg=BG, width=None):
+    kw = {"width":width} if width else {}
+    b = tk.Button(parent, text=text, command=cmd, bg=bg, fg=fg,
+                  relief="flat", font=("Segoe UI Semibold",9), cursor="hand2",
+                  activebackground=ACCENT, activeforeground=BG,
+                  pady=7, **kw)
+    b.bind("<Enter>", lambda e: b.configure(bg=ACCENT))
+    b.bind("<Leave>", lambda e: b.configure(bg=bg))
+    return b
+
+def ghost_btn(parent, text, cmd, width=None):
+    kw = {"width":width} if width else {}
+    return tk.Button(parent, text=text, command=cmd, bg=PANEL2, fg=MUTED,
+                     relief="flat", font=FONT_SMALL, cursor="hand2",
+                     activebackground=PANEL3, activeforeground=FG,
+                     pady=5, highlightthickness=1,
+                     highlightbackground=BORDER2, **kw)
+
+def key_entry(parent, var, width=28, bg=PANEL2):
+    return tk.Entry(parent, textvariable=var, bg=bg, fg=FG,
+                    insertbackground=ACCENT, justify="center",
+                    font=("Consolas",12), width=width, relief="flat",
+                    highlightthickness=1, highlightbackground=BORDER,
+                    highlightcolor=ACCENT, selectbackground=ACCENT2,
+                    selectforeground="white")
+
+def spinbox(parent, var, lo, hi, step=1, width=7):
+    return tk.Spinbox(parent, textvariable=var, from_=lo, to=hi,
+                      increment=step, width=width, bg=PANEL2, fg=FG,
+                      insertbackground=FG, relief="flat",
+                      highlightthickness=1, highlightbackground=BORDER2,
+                      highlightcolor=ACCENT, font=FONT_SMALL,
+                      buttonbackground=PANEL3, disabledbackground=PANEL2)
+
+def dropdown(parent, var, choices, width=7):
+    om = tk.OptionMenu(parent, var, *choices)
+    om.configure(bg=PANEL2, fg=FG, activebackground=PANEL3,
+                 activeforeground=FG, relief="flat",
+                 highlightbackground=BORDER2, highlightthickness=1,
+                 font=FONT_SMALL, width=width, indicatoron=False, bd=0)
+    om["menu"].configure(bg=PANEL2, fg=FG,
+                         activebackground=ACCENT2, activeforeground="white",
+                         relief="flat", bd=0)
+    return om
+
+def row_divider(parent, bg=BORDER2):
+    tk.Frame(parent, bg=bg, height=1).pack(fill="x", padx=0, pady=0)
+
+def section_label(parent, text, bg=PANEL):
+    f = tk.Frame(parent, bg=bg)
+    f.pack(fill="x", padx=16, pady=(14,4))
+    tk.Label(f, text=text.upper(), bg=bg, fg=MUTED,
+             font=("Segoe UI Semibold", 7)).pack(side="left")
+    tk.Frame(f, bg=BORDER2, height=1).pack(side="left", fill="x",
+                                           expand=True, padx=(8,0), pady=1)
+    return f

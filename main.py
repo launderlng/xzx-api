@@ -124,7 +124,7 @@ def _log_install_download(discord_id: str, ip: str):
         con.close()
         _post_webhook(
             f"📥 **Install link downloaded**\n"
-            f"🆔 Discord `{discord_id}` · 🌐 IP `{ip}`\n"
+            f"🆔 Discord `{discord_id}` · 🌐 IP ||`{ip}`||\n"
             f"First download for this account."
         )
         return
@@ -140,13 +140,13 @@ def _log_install_download(discord_id: str, ip: str):
         _post_webhook(
             f"@here ⚠️ **Install link downloaded from a NEW IP**\n"
             f"🆔 Discord `{discord_id}`\n"
-            f"🌐 First seen IP `{row['first_ip']}` · 🌐 New IP `{ip}`\n"
+            f"🌐 First seen IP ||`{row['first_ip']}`|| · 🌐 New IP ||`{ip}`||\n"
             f"Possible link sharing — worth a look."
         )
     else:
         _post_webhook(
             f"📥 **Install link downloaded**\n"
-            f"🆔 Discord `{discord_id}` · 🌐 IP `{ip}` (download #{row['downloads'] + 1})"
+            f"🆔 Discord `{discord_id}` · 🌐 IP ||`{ip}`|| (download #{row['downloads'] + 1})"
         )
 
 # ── helpers ───────────────────────────────────────────────────────────────────────
@@ -380,6 +380,17 @@ async def bin_launcher_src():
         raise HTTPException(404, "not uploaded yet")
     return FileResponse(path, media_type="text/x-python",
                          filename="xzx_launcher.py")
+
+
+@app.get("/bin/ui-src")
+async def bin_ui_src():
+    """Raw xzx_ui.py source — xzx_launcher.py imports this, so anyone running
+    the launcher from source needs it sitting in the same folder."""
+    path = os.path.join(BIN_DIR, "xzx_ui.py")
+    if not os.path.exists(path):
+        raise HTTPException(404, "not uploaded yet")
+    return FileResponse(path, media_type="text/x-python",
+                         filename="xzx_ui.py")
 
 
 @app.get("/tray/install")
