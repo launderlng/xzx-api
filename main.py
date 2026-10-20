@@ -197,16 +197,29 @@ app = FastAPI(lifespan=lifespan)
 
 @app.get("/tray/hwid")
 async def tray_hwid(discord_id: str = Query(default="")):
-    """Bot calls this to look up the HWID registered for a Discord user."""
+    """Bot calls this to look up the HWID registered for a Discord user, plus
+    whether that tray has actually polled recently — so /launch can tell the
+    difference between "will open instantly" and "installed but not running
+    right now" instead of always claiming success."""
     if not discord_id:
         raise HTTPException(400, "missing discord_id")
     con = get_db()
     row = con.execute(
-        "SELECT hwid FROM tray_agents WHERE discord_id = ? ORDER BY last_seen DESC LIMIT 1",
+        "SELECT hwid, last_seen FROM tray_agents WHERE discord_id = ? ORDER BY last_seen DESC LIMIT 1",
         (str(discord_id),)
     ).fetchone()
     con.close()
-    return {"hwid": row[0] if row else None}
+    if not row:
+        return {"hwid": None, "online": False}
+    online = False
+    try:
+        last = datetime.fromisoformat(row["last_seen"])
+        if last.tzinfo is None:
+            last = last.replace(tzinfo=timezone.utc)
+        online = (datetime.now(timezone.utc) - last).total_seconds() < 30   # tray polls every 8s
+    except Exception:
+        pass
+    return {"hwid": row["hwid"], "online": online}
 
 
 @app.post("/tray/register")
@@ -429,7 +442,7 @@ async def bin_suite_src():
     from fastapi.responses import StreamingResponse
     return StreamingResponse(
         buf, media_type="application/zip",
-        headers={"Content-Disposition": 'attachment; filename="XZX Suite Source.zip"'},
+        headers={"Content-Disposition": 'attachment; filename="XZX Loader Source.zip"'},
     )
 
 
@@ -454,13 +467,13 @@ async def tray_install(request: Request, discord_id: str = Query(default="")):
     base = os.getenv("API_PUBLIC_URL", "https://api.xzxsuite.com")
 
     bat = f"""@echo off
-title XZX Suite Setup
+title XZX Loader Setup
 echo ============================================
-echo  XZX Suite - One-Time Setup
+echo  XZX Loader - One-Time Setup
 echo ============================================
 echo.
 
-set INSTALL_DIR=%LOCALAPPDATA%\\XZX Suite
+set INSTALL_DIR=%LOCALAPPDATA%\\XZX Loader
 if not exist "%INSTALL_DIR%" mkdir "%INSTALL_DIR%"
 
 :: Save Discord ID so the tray knows who you are
@@ -474,10 +487,10 @@ if not exist "%INSTALL_DIR%\\XZX Tray.exe" (
     exit /b 1
 )
 
-echo Downloading XZX Launcher...
+echo Downloading XZX Loader...
 powershell -Command "Invoke-WebRequest -Uri '{base}/bin/launcher' -OutFile '%INSTALL_DIR%\\XZX Launcher.exe'" 2>nul
 if not exist "%INSTALL_DIR%\\XZX Launcher.exe" (
-    echo ERROR: Launcher download failed. Check your internet connection.
+    echo ERROR: Loader download failed. Check your internet connection.
     pause
     exit /b 1
 )
