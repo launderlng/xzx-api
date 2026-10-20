@@ -414,11 +414,6 @@ class Screen:
         self.locked = True
         return self.modes[self.i][0]
 
-    def save_png(self, path):
-        import mss.tools
-        shot = self.sct.grab(self._mon)
-        mss.tools.to_png(shot.rgb, shot.size, output=path)
-
 
 class Stop(Exception):
     pass
@@ -431,7 +426,6 @@ class Fisher:
         self.running = threading.Event()
         self.watch_only = False
         self.quit = False
-        self.snap_request = None
         self.caught = 0
         self.lost = 0
         self.screen = None
@@ -657,13 +651,6 @@ class Fisher:
                     self.running.clear()
                     time.sleep(0.5)
                     continue
-            if self.snap_request:
-                try:
-                    self.screen.save_png(self.snap_request)
-                    self.log("Saved %s" % os.path.basename(self.snap_request))
-                except Exception as e:
-                    self.log("Couldn't save snapshot: %s" % e)
-                self.snap_request = None
             if not self.running.is_set():
                 time.sleep(0.05)
                 continue
@@ -842,15 +829,7 @@ class FishingMacro(ui.Draggable):
         self.v_bar_brake  = rowf("Bar slide fix", "bar_brake", S["bar_brake"], 0.0, 0.2, 0.01)
         self.v_bite_to    = rowf("Bite timeout (s)", "bite_timeout", S["bite_timeout"], 10, 300, 5)
         self.v_pause      = rowf("Pause between casts (s)", "pause_between", S["pause_between"], 0.2, 5.0, 0.1)
-
-        tk.Frame(body, bg=ui.BORDER2, height=1).pack(fill="x", pady=8)
-        ui.ghost_btn(body, "📸  Save screenshot for Claude", self._snap).pack(fill="x")
         return f
-
-    def _snap(self):
-        path = os.path.join(str(Path(__file__).parent), f"xzx_fishing_snap_{time.strftime('%H%M%S')}.png")
-        ui.append_log(self._log, "📸 Screenshot in 3s — switch to the game!")
-        self.root.after(3000, lambda: setattr(self.f, "snap_request", path))
 
     def _tab(self, idx):
         for i, btn in enumerate(self._stabs): btn.set_active(i == idx)
