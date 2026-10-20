@@ -393,6 +393,46 @@ async def bin_ui_src():
                          filename="xzx_ui.py")
 
 
+_SRC_FILES = ["xzx_launcher.py", "xzx_ui.py", "xzx_fishing.py", "xzx_metal.py", "xzx_altclick.py"]
+
+
+@app.get("/bin/{name}-src")
+async def bin_macro_src(name: str):
+    """Raw source for a single macro script, e.g. /bin/fishing-src."""
+    fname = f"xzx_{name}.py"
+    if fname not in _SRC_FILES:
+        raise HTTPException(404, "unknown file")
+    path = os.path.join(BIN_DIR, fname)
+    if not os.path.exists(path):
+        raise HTTPException(404, "not uploaded yet")
+    return FileResponse(path, media_type="text/x-python", filename=fname)
+
+
+@app.get("/bin/suite-src")
+async def bin_suite_src():
+    """A zip of every current .py source file (launcher + ui + all 3 macros)
+    — the one-stop download so a dev testing from source doesn't have to
+    grab 5 files one at a time and risk mismatched versions."""
+    import io, zipfile
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        missing = []
+        for fname in _SRC_FILES:
+            path = os.path.join(BIN_DIR, fname)
+            if os.path.exists(path):
+                zf.write(path, fname)
+            else:
+                missing.append(fname)
+    if len(missing) == len(_SRC_FILES):
+        raise HTTPException(404, "not uploaded yet")
+    buf.seek(0)
+    from fastapi.responses import StreamingResponse
+    return StreamingResponse(
+        buf, media_type="application/zip",
+        headers={"Content-Disposition": 'attachment; filename="XZX Suite Source.zip"'},
+    )
+
+
 @app.get("/tray/install")
 async def tray_install(request: Request, discord_id: str = Query(default="")):
     """

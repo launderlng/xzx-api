@@ -1,0 +1,320 @@
+"""
+XZX Metal Detector Macro — purple/pink CFX style
+Auto skill-check for the FiveM metal detector minigame.
+"""
+import tkinter as tk
+import tkinter.messagebox
+import threading, time, os, sys, ctypes
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent))
+import xzx_ui as ui
+
+# ── ANTI-BYPASS: must be launched from XZX Launcher ──────────────────────────
+import hmac as _hmac, hashlib as _hs, time as _t2
+
+_SECRET = b"xzx_suite_2025_salt_noclone"
+
+def _get_hwid():
+    _p = []
+    try:
+        import winreg
+        _k = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE,
+                            "SOFTWARE\\Microsoft\\Cryptography")
+        _p.append(winreg.QueryValueEx(_k, "MachineGuid")[0])
+    except Exception: pass
+    try:
+        import uuid; _p.append(str(uuid.getnode()))
+    except Exception: pass
+    return _hs.sha256(("|".join(_p) or "fb").encode()).hexdigest()[:32]
+
+def _valid_session(did, hwid, tok):
+    for off in (0, -1, 1):
+        ts  = str(int(_t2.time() // 300) + off)
+        raw = f"{did}:{hwid}:{ts}".encode()
+        exp = _hmac.new(_SECRET, raw, _hs.sha256).hexdigest()[:24]
+        if _hmac.compare_digest(exp, tok):
+            return True
+    return False
+
+def _gate():
+    # anti-debug check removed — IsDebuggerPresent() false-positives on
+    # machines with antivirus/EDR, silently killing the macro with no error.
+    _did  = os.environ.get("XZX_DISCORD_ID", "")
+    _hwid = _get_hwid()
+    _tok  = os.environ.get("XZX_SESSION_TOKEN", "")
+    if not _did or not _tok or not _valid_session(_did, _hwid, _tok):
+        _r = tk.Tk(); _r.withdraw()
+        tkinter.messagebox.showerror("XZX", "Invalid session. Launch from XZX Launcher.")
+        _r.destroy(); sys.exit(1)
+
+_gate()
+# ─────────────────────────────────────────────────────────────────────────────
+
+WIN_W, WIN_H = 440, 540
+
+# ── GDI pixel colour ──────────────────────────────────────────────────────────
+def _get_pixel(x, y):
+    try:
+        hdc = ctypes.windll.user32.GetDC(0)
+        col = ctypes.windll.gdi32.GetPixel(hdc, x, y)
+        ctypes.windll.user32.ReleaseDC(0, hdc)
+        if col == -1: return None
+        r = col & 0xFF; g = (col >> 8) & 0xFF; b = (col >> 16) & 0xFF
+        return r, g, b
+    except Exception:
+        return None
+
+def _colour_match(px, target_rgb, tol=30):
+    if px is None: return False
+    return all(abs(px[i]-target_rgb[i]) <= tol for i in range(3))
+
+# ── SendInput key press ────────────────────────────────────────────────────────
+PUL = ctypes.POINTER(ctypes.c_ulong)
+
+class _KBInput(ctypes.Structure):
+    _fields_ = [("wVk",ctypes.c_ushort),("wScan",ctypes.c_ushort),
+                ("dwFlags",ctypes.c_ulong),("time",ctypes.c_ulong),
+                ("dwExtraInfo",PUL)]
+
+class _InputUnion(ctypes.Union):
+    _fields_ = [("ki",_KBInput)]
+
+class _Input(ctypes.Structure):
+    _fields_ = [("type",ctypes.c_ulong),("ii",_InputUnion)]
+
+def _press_e():
+    try:
+        down = _Input(type=1); down.ii.ki.wVk = 0x45
+        up   = _Input(type=1); up.ii.ki.wVk   = 0x45; up.ii.ki.dwFlags = 2
+        ctypes.windll.user32.SendInput(1, ctypes.byref(down), ctypes.sizeof(down))
+        time.sleep(0.04)
+        ctypes.windll.user32.SendInput(1, ctypes.byref(up),   ctypes.sizeof(up))
+    except Exception: pass
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+class MetalMacro:
+    def __init__(self):
+        self.running = False
+        self.hits    = 0
+        self._thread = None
+
+        self.root = tk.Tk()
+        self.root.title("XZX — Metal Detector")
+        self.root.geometry(f"{WIN_W}x{WIN_H}")
+        self.root.resizable(False, False)
+        self.root.configure(bg=ui.BG)
+        self._center()
+        self._build()
+        self.root.bind("<F7>", lambda e: self._start())
+        self.root.bind("<F8>", lambda e: self._stop())
+        self.root.protocol("WM_DELETE_WINDOW", self._quit)
+
+    def _center(self):
+        self.root.update_idletasks()
+        sw, sh = self.root.winfo_screenwidth(), self.root.winfo_screenheight()
+        self.root.geometry(f"{WIN_W}x{WIN_H}+{(sw-WIN_W)//2}+{(sh-WIN_H)//2}")
+
+    def _build(self):
+        bgcv = tk.Canvas(self.root, width=WIN_W, height=WIN_H,
+                         highlightthickness=0, bg=ui.BG)
+        bgcv.place(x=0, y=0)
+        self.root.after(10, lambda: ui.draw_gradient(
+            bgcv, WIN_W, WIN_H, ui.BG, "#200a42", steps=80))
+
+        # header
+        hdr = tk.Frame(self.root, bg=ui.PANEL2,
+                       highlightbackground=ui.BORDER, highlightthickness=1)
+        hdr.place(x=0, y=0, width=WIN_W, height=ui.HEADER_H)
+        tk.Label(hdr, text="🔍", bg=ui.PANEL2, fg=ui.ACCENT,
+                 font=("Segoe UI Emoji", 16)).pack(side="left", padx=(14,4))
+        tk.Label(hdr, text="METAL DETECTOR", bg=ui.PANEL2, fg=ui.FG,
+                 font=("Segoe UI Black", 12)).pack(side="left")
+        self.badge = ui.StatusBadge(hdr, bg=ui.PANEL2)
+        self.badge.frame.pack(side="right", padx=14)
+
+        tk.Frame(self.root, bg=ui.ACCENT, height=2).place(
+            x=0, y=ui.HEADER_H, width=WIN_W)
+
+        # sidebar
+        sb = tk.Frame(self.root, bg=ui.PANEL2,
+                      highlightbackground=ui.BORDER, highlightthickness=1)
+        sb.place(x=0, y=ui.HEADER_H+2,
+                 width=ui.SIDEBAR_W, height=WIN_H-ui.HEADER_H-2)
+
+        self._stabs = []
+        for i,(ico,name) in enumerate([("🔍","Macro"),("📊","Stats"),("⚙","Settings")]):
+            btn = ui.SideIconBtn(sb, ico, name, active_color=ui.ACCENT)
+            btn.frame.pack(fill="x")
+            btn.bind("<Button-1>", lambda e, idx=i: self._tab(idx))
+            self._stabs.append(btn)
+
+        cx = ui.SIDEBAR_W+1
+        cw = WIN_W - cx
+        ch = WIN_H - ui.HEADER_H - 2
+        self.cont = tk.Frame(self.root, bg=ui.PANEL)
+        self.cont.place(x=cx, y=ui.HEADER_H+2, width=cw, height=ch)
+
+        v0 = self._mk_macro(cw, ch)
+        v1 = self._mk_stats(cw, ch)
+        v2 = self._mk_settings(cw, ch)
+        self._views = [v0, v1, v2]
+        self._tab(0)
+
+    def _mk_macro(self, w, h):
+        f = tk.Frame(self.cont, bg=ui.PANEL, width=w, height=h)
+        f.pack_propagate(False)
+        body = tk.Frame(f, bg=ui.PANEL)
+        body.pack(fill="both", expand=True, padx=20, pady=16)
+
+        tk.Label(body, text="🔍", bg=ui.PANEL, fg=ui.ACCENT,
+                 font=("Segoe UI Emoji", 36)).pack(pady=(8,4))
+        tk.Label(body, text="Metal Detector Macro", bg=ui.PANEL, fg=ui.FG,
+                 font=("Segoe UI Black", 14)).pack()
+        tk.Label(body, text="GDI pixel scan — auto skill-check",
+                 bg=ui.PANEL, fg=ui.MUTED, font=("Segoe UI", 9)).pack(pady=(2,16))
+
+        tk.Frame(body, bg=ui.BORDER2, height=1).pack(fill="x")
+
+        tiles = tk.Frame(body, bg=ui.PANEL)
+        tiles.pack(fill="x", pady=12)
+        self._t_hits   = ui.StatTile(tiles, "HITS",   "0", accent=ui.GREEN)
+        self._t_hits.frame.pack(side="left", expand=True, fill="both", padx=(0,4))
+        self._t_misses = ui.StatTile(tiles, "MISSES", "0", accent=ui.RED)
+        self._t_misses.frame.pack(side="left", expand=True, fill="both", padx=(4,0))
+
+        tk.Frame(body, bg=ui.BORDER2, height=1).pack(fill="x", pady=(0,12))
+
+        self._toggle = ui.ToggleButton(body, self._on_toggle,
+                                        start_label="▶  START SCANNING",
+                                        stop_label="■  STOP SCANNING",
+                                        start_bg=ui.ACCENT2, stop_bg=ui.RED)
+        self._toggle.btn.pack(fill="x", ipady=4)
+
+        hr = tk.Frame(body, bg=ui.PANEL)
+        hr.pack(fill="x", pady=(10,0))
+        for k, txt in [("F7","Start"),("F8","Stop")]:
+            kg = tk.Frame(hr, bg=ui.PANEL); kg.pack(side="left", padx=(0,6))
+            tk.Label(kg, text=k, bg=ui.PANEL2, fg=ui.FG2,
+                     font=("Consolas",8), padx=6, pady=3,
+                     highlightbackground=ui.BORDER2,
+                     highlightthickness=1).pack(side="left")
+            tk.Label(kg, text=txt, bg=ui.PANEL, fg=ui.MUTED,
+                     font=("Segoe UI",8)).pack(side="left", padx=3)
+
+        tk.Frame(body, bg=ui.BORDER2, height=1).pack(fill="x", pady=(10,4))
+        self._log, sb2 = ui.log_box(body, height=5)
+        sb2.pack(side="right", fill="y")
+        self._log.pack(side="left", fill="both", expand=True)
+        return f
+
+    def _mk_stats(self, w, h):
+        f = tk.Frame(self.cont, bg=ui.PANEL, width=w, height=h)
+        body = tk.Frame(f, bg=ui.PANEL)
+        body.pack(fill="both", expand=True, padx=20, pady=20)
+        tk.Label(body, text="SESSION STATS", bg=ui.PANEL, fg=ui.MUTED,
+                 font=("Segoe UI Semibold", 8)).pack(anchor="w")
+        tk.Frame(body, bg=ui.BORDER2, height=1).pack(fill="x", pady=(4,12))
+
+        def row(lbl):
+            r = tk.Frame(body, bg=ui.PANEL); r.pack(fill="x", pady=4)
+            tk.Label(r, text=lbl, bg=ui.PANEL, fg=ui.MUTED,
+                     font=("Segoe UI",9)).pack(side="left")
+            v = tk.StringVar(value="0")
+            tk.Label(r, textvariable=v, bg=ui.PANEL, fg=ui.FG,
+                     font=("Segoe UI Semibold",9)).pack(side="right")
+            return v
+
+        self._sv_hits   = row("Successful skill-checks")
+        self._sv_misses = row("Missed checks")
+        self._sv_uptime = row("Uptime")
+        return f
+
+    def _mk_settings(self, w, h):
+        f = tk.Frame(self.cont, bg=ui.PANEL, width=w, height=h)
+        body = tk.Frame(f, bg=ui.PANEL)
+        body.pack(fill="both", expand=True, padx=20, pady=20)
+        ui.section_label(body, "Scan Region", bg=ui.PANEL)
+
+        def row(lbl, default, lo, hi):
+            r = tk.Frame(body, bg=ui.PANEL); r.pack(fill="x", pady=5)
+            tk.Label(r, text=lbl, bg=ui.PANEL, fg=ui.FG2,
+                     font=("Segoe UI",9)).pack(side="left")
+            v = tk.IntVar(value=default)
+            ui.spinbox(r, v, lo, hi, step=1, width=7).pack(side="right")
+            return v
+
+        self.v_scan_x = row("Scan X",  900, 0, 3840)
+        self.v_scan_y = row("Scan Y",  500, 0, 2160)
+
+        tk.Frame(body, bg=ui.BORDER2, height=1).pack(fill="x", pady=8)
+        ui.section_label(body, "Detection", bg=ui.PANEL)
+
+        def rowf(lbl, default, lo, hi):
+            r = tk.Frame(body, bg=ui.PANEL); r.pack(fill="x", pady=5)
+            tk.Label(r, text=lbl, bg=ui.PANEL, fg=ui.FG2,
+                     font=("Segoe UI",9)).pack(side="left")
+            v = tk.IntVar(value=default)
+            ui.spinbox(r, v, lo, hi, step=5, width=7).pack(side="right")
+            return v
+
+        self.v_tol = rowf("Colour tolerance", 30, 5, 80)
+        self.v_r   = rowf("Target R", 255, 0, 255)
+        self.v_g   = rowf("Target G", 220, 0, 255)
+        self.v_b   = rowf("Target B",  50, 0, 255)
+        return f
+
+    def _tab(self, idx):
+        for i, btn in enumerate(self._stabs): btn.set_active(i == idx)
+        for i, v in enumerate(self._views):
+            if i == idx: v.place(x=0,y=0,relwidth=1,relheight=1); v.lift()
+            else:        v.place_forget()
+
+    def _on_toggle(self, running):
+        if running: self._start()
+        else:       self._stop()
+
+    def _start(self):
+        if self.running: return
+        self.running   = True
+        self._start_ts = time.time()
+        self.badge.set("Running", ui.GREEN)
+        self._toggle.btn.configure(text="■  STOP SCANNING", bg=ui.RED, fg="white")
+        self._thread = threading.Thread(target=self._loop, daemon=True)
+        self._thread.start()
+        ui.append_log(self._log, "▶ Scanner started")
+
+    def _stop(self):
+        if not self.running: return
+        self.running = False
+        self.badge.set("Stopped", ui.MUTED)
+        self._toggle.force_stop()
+        ui.append_log(self._log, "■ Scanner stopped")
+
+    def _loop(self):
+        while self.running:
+            try:
+                tol = self.v_tol.get()
+                tgt = (self.v_r.get(), self.v_g.get(), self.v_b.get())
+                sx  = self.v_scan_x.get()
+                sy  = self.v_scan_y.get()
+                px  = _get_pixel(sx, sy)
+                if _colour_match(px, tgt, tol):
+                    _press_e()
+                    self.hits += 1
+                    self._t_hits.set(self.hits)
+                    self._sv_hits.set(str(self.hits))
+                    ui.append_log(self._log, f"  ✓ Hit #{self.hits}")
+                    time.sleep(0.3)
+                elapsed = time.time() - self._start_ts
+                hh = int(elapsed//3600); mm = int((elapsed%3600)//60); ss = int(elapsed%60)
+                self._sv_uptime.set(f"{hh:02d}:{mm:02d}:{ss:02d}")
+                time.sleep(0.05)
+            except Exception as e:
+                ui.append_log(self._log, f"  ⚠ {e}"); time.sleep(1.0)
+
+    def _quit(self): self.running = False; self.root.destroy()
+    def run(self):   self.root.mainloop()
+
+if __name__ == "__main__": MetalMacro().run()
