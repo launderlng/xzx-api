@@ -1165,6 +1165,13 @@ class HubWindow(Draggable):
         if not self.linked: return
         if mid in self.procs and self.procs[mid].poll() is None: return
         m    = next(x for x in MACROS if x["id"] == mid)
+        # Regenerate the token right before launch instead of reusing the one
+        # made at login — it bakes in a 5-min time window, so a Hub left open
+        # for a test session (common — exactly what was happening here) would
+        # hand every later launch a token that's already aged out, and the
+        # macro would reject it as "Invalid session" even on a legit account.
+        global SESSION_TOKEN
+        SESSION_TOKEN = _make_session_token(self._discord_id, HWID)
         env  = {
             **os.environ,
             # all three must match for child to start
