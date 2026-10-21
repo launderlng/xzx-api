@@ -293,12 +293,13 @@ class LoginWindow(Draggable):
         # ── single content panel — part of the one rounded window,        ─
         # ── no nested card / shadow, just a clean flat section ───────────
         CARD_W = WIN_W - 72
-        card = tk.Frame(wrap, bg=ui.PANEL, width=CARD_W,
-                        highlightbackground=ui.BORDER, highlightthickness=1)
+        card = ui.RoundFrame(wrap, bg=ui.PANEL, border=ui.BORDER, border_w=1, r=16)
+        card.configure(width=CARD_W)
         card.pack()
-        tk.Frame(card, bg=ui.ACCENT, height=2).pack(fill="x")
+        cbody = card.body
+        tk.Frame(cbody, bg=ui.ACCENT, height=2).pack(fill="x")
 
-        inn = tk.Frame(card, bg=ui.PANEL)
+        inn = tk.Frame(cbody, bg=ui.PANEL)
         inn.pack(fill="both", expand=True, padx=26, pady=26)
 
         # ── Discord icon ──────────────────────────────────────────────────
@@ -376,6 +377,7 @@ class LoginWindow(Draggable):
         tk.Label(inn, text="🔒  Validated server-side on every launch",
                  bg=ui.PANEL, fg=ui.BORDER,
                  font=("Segoe UI", 7)).pack(pady=(14, 0))
+        card.sync_size()
 
         # ── footer — buy-access link, no clutter ────────────────────────────
         foot = tk.Frame(self.root, bg=ui.BG)
@@ -974,12 +976,12 @@ class HubWindow(Draggable):
         body = tk.Frame(f, bg=ui.PANEL)
         body.place(relx=0.5, rely=0.5, anchor="center")
 
-        # icon in a coloured circle-ish card
-        ico_card = tk.Frame(body, bg=ui.PANEL2,
-                            highlightbackground=ui.BORDER, highlightthickness=1)
+        # icon in a rounded card
+        ico_card = ui.RoundFrame(body, bg=ui.PANEL2, border=ui.BORDER, border_w=1, r=18)
         ico_card.pack(pady=(0,18))
-        tk.Label(ico_card, text="🔗", bg=ui.PANEL2, fg=ui.ACCENT,
+        tk.Label(ico_card.body, text="🔗", bg=ui.PANEL2, fg=ui.ACCENT,
                  font=("Segoe UI Emoji", 34), padx=22, pady=14).pack()
+        ico_card.sync_size()
 
         tk.Label(body, text="Link Your Discord Account",
                  bg=ui.PANEL, fg=ui.FG,
@@ -991,11 +993,12 @@ class HubWindow(Draggable):
 
         # logged-in pill
         did = self._discord_id
-        tk.Label(body, text=f"  🆔  {did}  ",
+        id_card = ui.RoundFrame(body, bg=ui.PANEL2, border=ui.BORDER, border_w=1, r=10)
+        id_card.pack(pady=(0,20))
+        tk.Label(id_card.body, text=f"🆔  {did}",
                  bg=ui.PANEL2, fg=ui.MUTED, font=("Consolas", 9),
-                 padx=6, pady=6,
-                 highlightbackground=ui.BORDER, highlightthickness=1
-                 ).pack(pady=(0,20))
+                 padx=10, pady=6).pack()
+        id_card.sync_size()
 
         btn = tk.Button(body, text="  🔗   Link Discord Account  ",
                         bg=ui.ACCENT2, fg=ui.BG,

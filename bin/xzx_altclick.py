@@ -217,16 +217,8 @@ class AltClickMacro(ui.Draggable):
         self._tbtn.btn.pack(fill="x", ipady=4)
         self._tbtn.btn.configure(fg=ui.BG)
 
-        hr = tk.Frame(body, bg=ui.PANEL)
-        hr.pack(fill="x", pady=(10,0))
-        for k, txt in [("F9","Toggle"), ("F10","Close")]:
-            kg = tk.Frame(hr, bg=ui.PANEL); kg.pack(side="left", padx=(0,6))
-            tk.Label(kg, text=k, bg=ui.PANEL2, fg=ui.FG2,
-                     font=("Consolas",8), padx=6, pady=3,
-                     highlightbackground=ui.BORDER2,
-                     highlightthickness=1).pack(side="left")
-            tk.Label(kg, text=txt, bg=ui.PANEL, fg=ui.MUTED,
-                     font=("Segoe UI",8)).pack(side="left", padx=3)
+        ui.hotkey_row(body, [("F9","Toggle"), ("F10","Close")],
+                      bg=ui.PANEL).pack(fill="x", pady=(10,0))
 
         tk.Frame(body, bg=ui.BORDER2, height=1).pack(fill="x", pady=(10,4))
         self._log, sb2 = ui.log_box(body, height=5)

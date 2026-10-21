@@ -293,6 +293,82 @@ def round_rect(canvas, x0, y0, x1, y1, r=14, **kw):
                                   smooth=True, splinesteps=24, **kw)
 
 
+# ── rounded card ─────────────────────────────────────────────────────────────
+class RoundFrame(tk.Canvas):
+    """A Canvas that draws a rounded-rect background and otherwise behaves
+    like an ordinary Frame: pack/grid it, it resizes with its geometry
+    manager, and you add children to `.body` (a plain tk.Frame) exactly as
+    you would to any other frame. Used for stat tiles, log panels and any
+    other 'card' that used to be a square-cornered tk.Frame."""
+    def __init__(self, parent, bg=PANEL, border=BORDER2, border_w=1, r=14):
+        pbg = parent["bg"]
+        super().__init__(parent, bg=pbg, highlightthickness=0)
+        self._bg, self._border, self._border_w, self._r = bg, border, border_w, r
+        self.body = tk.Frame(self, bg=bg)
+        self._win = self.create_window(0, 0, anchor="nw", window=self.body)
+        self.bind("<Configure>", self._redraw)
+
+    def sync_size(self):
+        """Call once after populating .body, before this widget is packed/gridded.
+        A Canvas doesn't auto-size to its children the way a Frame does, so this
+        copies body's natural (requested) size onto the canvas — giving it the
+        same initial footprint a plain tk.Frame would have had. A parent that
+        packs this with fill/expand still stretches it normally afterwards,
+        via the <Configure> binding below."""
+        self.body.update_idletasks()
+        inset = max(self._border_w, 1) + 1
+        w = self.body.winfo_reqwidth() + 2 * inset
+        h = self.body.winfo_reqheight() + 2 * inset
+        self.configure(width=w, height=h)
+
+    def _redraw(self, _event=None):
+        w, h = self.winfo_width(), self.winfo_height()
+        if w < 4 or h < 4:
+            return
+        self.delete("bg")
+        kw = {"fill": self._bg, "tags": "bg"}
+        if self._border:
+            kw["outline"] = self._border
+            kw["width"] = self._border_w
+        else:
+            kw["outline"] = ""
+        round_rect(self, 1, 1, w - 1, h - 1, self._r, **kw)
+        self.tag_lower("bg")
+        inset = max(self._border_w, 1) + 1
+        self.coords(self._win, inset, inset)
+        self.itemconfigure(self._win, width=max(w - 2 * inset, 1), height=max(h - 2 * inset, 1))
+
+
+# ── hotkey keycap chip ────────────────────────────────────────────────────────
+def hotkey_chip(parent, key, label, bg=PANEL):
+    """A small rounded 'keycap' badge (e.g. F5) plus its action word, replacing
+    the old square-cornered bordered label used in the hotkey row under the
+    Start/Stop button on every macro screen."""
+    kg = tk.Frame(parent, bg=bg)
+    font = ("Consolas", 8, "bold")
+    tmp = tk.Label(kg, text=key, font=font)
+    tmp.update_idletasks()
+    tw, th = tmp.winfo_reqwidth(), tmp.winfo_reqheight()
+    tmp.destroy()
+    pad_x, pad_y = 7, 4
+    w, h = tw + pad_x * 2, th + pad_y * 2
+    cv = tk.Canvas(kg, width=w, height=h, bg=bg, highlightthickness=0)
+    cv.pack(side="left")
+    round_rect(cv, 0, 0, w, h, r=5, fill=PANEL3, outline=BORDER2, width=1)
+    cv.create_text(w // 2, h // 2, text=key, fill=FG2, font=font)
+    tk.Label(kg, text=label, bg=bg, fg=MUTED, font=("Segoe UI", 8)).pack(side="left", padx=(5, 0))
+    return kg
+
+
+def hotkey_row(parent, pairs, bg=PANEL):
+    """pairs: [(key, label), ...]. Returns a frame you pack/place yourself."""
+    hr = tk.Frame(parent, bg=bg)
+    for i, (k, txt) in enumerate(pairs):
+        chip = hotkey_chip(hr, k, txt, bg=bg)
+        chip.pack(side="left", padx=(0, 10) if i < len(pairs) - 1 else 0)
+    return hr
+
+
 def round_gradient_card(canvas, x0, y0, x1, y1, c1, c2, r=16, steps=40,
                          outline="", outline_width=0):
     """Rounded rectangle filled with a vertical gradient, via clipped bands."""
@@ -441,16 +517,17 @@ class TabBar:
 # ── stat tile ─────────────────────────────────────────────────────────────────
 class StatTile:
     def __init__(self, parent, name, value="0", accent=ACCENT, bg=PANEL):
-        self.frame = tk.Frame(parent, bg=bg,
-                              highlightbackground=BORDER2, highlightthickness=1)
-        tk.Frame(self.frame, bg=accent, height=2).pack(fill="x")
-        inn = tk.Frame(self.frame, bg=bg)
+        self.frame = RoundFrame(parent, bg=bg, border=BORDER2, border_w=1, r=12)
+        body = self.frame.body
+        tk.Frame(body, bg=accent, height=2).pack(fill="x")
+        inn = tk.Frame(body, bg=bg)
         inn.pack(fill="both", expand=True, padx=12, pady=8)
         self.var = tk.StringVar(value=value)
         tk.Label(inn, textvariable=self.var, bg=bg, fg=FG,
                  font=FONT_BADGE).pack(anchor="w")
         tk.Label(inn, text=name, bg=bg, fg=MUTED,
                  font=FONT_LABEL).pack(anchor="w")
+        self.frame.sync_size()
 
     def set(self, v): self.var.set(str(v))
 
