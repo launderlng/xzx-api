@@ -13,17 +13,22 @@ BG       = "#000000"          # true black
 GRAD1    = "#000000"
 GRAD2    = "#0a0a0a"
 GRAD3    = "#000000"          # no real gradient — background is one flat layer
-PANEL    = "#0c0c0c"
-PANEL2   = "#000000"
-PANEL3   = "#161616"
+# PANEL/PANEL2/PANEL3 and the borders are deliberately lifted a notch lighter
+# than true black here (was within a couple of RGB steps of BG) — at that
+# level a rounded card's corners are mathematically rounded but visually
+# indistinguishable from a square one on screen. This keeps the mono
+# black/white language but gives "card vs background" actual contrast.
+PANEL    = "#141414"
+PANEL2   = "#0a0a0a"
+PANEL3   = "#1c1c1c"
 ACCENT   = "#ffffff"          # pure white — the one "bold" colour is no colour at all
 ACCENT2  = "#ffffff"          # secondary accent — also pure white, no off-white/grey tint
 ACCENT3  = "#4d4d4d"
 FG       = "#ffffff"
 FG2      = "#c2c2c2"
 MUTED    = "#6b6b6b"
-BORDER   = "#262626"
-BORDER2  = "#1a1a1a"
+BORDER   = "#333333"
+BORDER2  = "#2a2a2a"
 GREEN    = "#3ddc74"
 GREEN2   = "#27b65c"
 RED      = "#ff4d5e"
@@ -377,7 +382,7 @@ def hotkey_chip(parent, key, label, bg=PANEL):
     w, h = tw + pad_x * 2, th + pad_y * 2
     cv = tk.Canvas(kg, width=w, height=h, bg=bg, highlightthickness=0)
     cv.pack(side="left")
-    round_rect(cv, 0, 0, w, h, r=5, fill=PANEL3, outline=BORDER2, width=1)
+    round_rect(cv, 0, 0, w, h, r=8, fill=PANEL3, outline=BORDER, width=1)
     cv.create_text(w // 2, h // 2, text=key, fill=FG2, font=font)
     tk.Label(kg, text=label, bg=bg, fg=MUTED, font=("Segoe UI", 8)).pack(side="left", padx=(5, 0))
     return kg
@@ -540,7 +545,7 @@ class TabBar:
 # ── stat tile ─────────────────────────────────────────────────────────────────
 class StatTile:
     def __init__(self, parent, name, value="0", accent=ACCENT, bg=PANEL):
-        self.frame = RoundFrame(parent, bg=bg, border=BORDER2, border_w=1, r=12)
+        self.frame = RoundFrame(parent, bg=bg, border=BORDER2, border_w=1, r=18)
         body = self.frame.body
         tk.Frame(body, bg=accent, height=2).pack(fill="x")
         inn = tk.Frame(body, bg=bg)

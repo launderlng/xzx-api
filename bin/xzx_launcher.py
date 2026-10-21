@@ -293,7 +293,7 @@ class LoginWindow(Draggable):
         # ── single content panel — part of the one rounded window,        ─
         # ── no nested card / shadow, just a clean flat section ───────────
         CARD_W = WIN_W - 72
-        card = ui.RoundFrame(wrap, bg=ui.PANEL, border=ui.BORDER, border_w=1, r=16)
+        card = ui.RoundFrame(wrap, bg=ui.PANEL, border=ui.BORDER, border_w=1, r=22)
         card.configure(width=CARD_W)
         card.pack()
         cbody = card.body
@@ -977,7 +977,7 @@ class HubWindow(Draggable):
         body.place(relx=0.5, rely=0.5, anchor="center")
 
         # icon in a rounded card
-        ico_card = ui.RoundFrame(body, bg=ui.PANEL2, border=ui.BORDER, border_w=1, r=18)
+        ico_card = ui.RoundFrame(body, bg=ui.PANEL2, border=ui.BORDER, border_w=1, r=24)
         ico_card.pack(pady=(0,18))
         tk.Label(ico_card.body, text="🔗", bg=ui.PANEL2, fg=ui.ACCENT,
                  font=("Segoe UI Emoji", 34), padx=22, pady=14).pack()
@@ -993,7 +993,7 @@ class HubWindow(Draggable):
 
         # logged-in pill
         did = self._discord_id
-        id_card = ui.RoundFrame(body, bg=ui.PANEL2, border=ui.BORDER, border_w=1, r=10)
+        id_card = ui.RoundFrame(body, bg=ui.PANEL2, border=ui.BORDER, border_w=1, r=14)
         id_card.pack(pady=(0,20))
         tk.Label(id_card.body, text=f"🆔  {did}",
                  bg=ui.PANEL2, fg=ui.MUTED, font=("Consolas", 9),
