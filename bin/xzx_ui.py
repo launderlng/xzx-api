@@ -55,6 +55,29 @@ def apply_theme(root: tk.Tk):
     except Exception: pass
 
 
+def primary_screen_size(root: tk.Tk):
+    """The PRIMARY monitor's resolution, for centering windows.
+    Tk's own winfo_screenwidth()/height() return the bounding box of the
+    whole Windows virtual desktop when there's more than one monitor —
+    so on a two-monitor setup a window 'centered' with those numbers lands
+    on the seam between monitors, not the middle of either screen. On
+    Windows we ask the OS directly for just the primary monitor's size;
+    anywhere else (or if that call fails) we fall back to Tk's numbers."""
+    if sys.platform.startswith("win"):
+        try:
+            import ctypes
+            user32 = ctypes.windll.user32
+            try: user32.SetProcessDPIAware()
+            except Exception: pass
+            w = user32.GetSystemMetrics(0)   # SM_CXSCREEN
+            h = user32.GetSystemMetrics(1)   # SM_CYSCREEN
+            if w > 0 and h > 0:
+                return w, h
+        except Exception:
+            pass
+    return root.winfo_screenwidth(), root.winfo_screenheight()
+
+
 def round_window(root: tk.Tk, w: int, h: int, radius: int = 22):
     """
     Clip a borderless Tk window (overrideredirect) to real rounded

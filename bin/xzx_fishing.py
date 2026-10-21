@@ -691,7 +691,7 @@ class FishingMacro(ui.Draggable):
 
     def _center(self):
         self.root.update_idletasks()
-        sw, sh = self.root.winfo_screenwidth(), self.root.winfo_screenheight()
+        sw, sh = ui.primary_screen_size(self.root)
         self.root.geometry(f"{WIN_W}x{WIN_H}+{(sw-WIN_W)//2}+{(sh-WIN_H)//2}")
 
     def _get_monitor(self):

@@ -326,9 +326,6 @@ def _run_tray():
         d.ellipse((2, 2, 62, 62), fill="#000000", outline="#ffffff", width=3)
         d.text((20, 20), "X", fill="#ffffff")
 
-        def on_launch(icon, item):
-            _launch()
-
         def on_discord(icon, item):
             webbrowser.open(DISCORD_URL)
 
@@ -336,8 +333,12 @@ def _run_tray():
             icon.stop()
             os._exit(0)
 
+        # No direct "Launch" option here on purpose — opening the Suite is
+        # only ever triggered by a signed token from the Discord bot's
+        # /launch command (see _poll/_launch above). The tray icon's own
+        # menu can only point people at Discord, never start it itself.
         menu = pystray.Menu(
-            pystray.MenuItem("Launch XZX", on_launch, default=True),
+            pystray.MenuItem("Use /launch in Discord to open", on_discord, default=True),
             pystray.MenuItem("Join Discord", on_discord),
             pystray.Menu.SEPARATOR,
             pystray.MenuItem(f"v{TRAY_VERSION}", None, enabled=False),
