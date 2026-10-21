@@ -368,7 +368,7 @@ class LoginWindow(Draggable):
         self.key_btn = ui.RoundButton(inn, "Activate Key",
                                       self._activate_key,
                                       w=BTN_W, h=40, r=11,
-                                      bg=ui.ACCENT2, hover=ui.ACCENT,
+                                      bg=ui.ACCENT2, hover="#e2e2e2",
                                       font=("Segoe UI Black", 10),
                                       parent_bg=ui.PANEL)
         self.key_btn.pack(pady=(10, 0))
@@ -999,12 +999,12 @@ class HubWindow(Draggable):
 
         btn = tk.Button(body, text="  🔗   Link Discord Account  ",
                         bg=ui.ACCENT2, fg=ui.BG,
-                        activebackground=ui.ACCENT, activeforeground=ui.BG,
+                        activebackground="#e2e2e2", activeforeground=ui.BG,
                         relief="flat", font=("Segoe UI Black", 11),
                         cursor="hand2", pady=13,
                         command=self._link_discord)
         btn.pack(fill="x", padx=20)
-        btn.bind("<Enter>", lambda e: btn.configure(bg=ui.ACCENT))
+        btn.bind("<Enter>", lambda e: btn.configure(bg="#e2e2e2"))
         btn.bind("<Leave>", lambda e: btn.configure(bg=ui.ACCENT2))
 
         self._link_status = tk.Label(body, text="",
@@ -1039,7 +1039,7 @@ class HubWindow(Draggable):
         ("Status", [("GREEN","Success / running"), ("GREEN2","Success (dim)"),
                     ("RED","Error / stop"), ("RED2","Error (dim)")]),
         ("Macro accents", [("CYAN","Fishing accent"), ("ORANGE","Orange accent"),
-                            ("YELLOW","Yellow accent"), ("PINK","Pink accent")]),
+                            ("YELLOW","Yellow accent")]),
     ]
 
     def _mk_theme_panel(self, w, h):
@@ -1065,6 +1065,19 @@ class HubWindow(Draggable):
                               highlightthickness=1, command=self._reset_theme)
         reset_btn.place(relx=1.0, rely=0.5, anchor="e", x=-14)
 
+        tk.Frame(f, bg=ui.BORDER2, height=1).pack(fill="x")
+
+        # live preview — updates on every reload, so a colour change is visible without
+        # leaving this tab or opening a macro window
+        prev = tk.Frame(f, bg=ui.PANEL2); prev.pack(fill="x")
+        prev_inner = tk.Frame(prev, bg=ui.PANEL2); prev_inner.pack(fill="x", padx=20, pady=12)
+        tk.Label(prev_inner, text="PREVIEW", bg=ui.PANEL2, fg=ui.MUTED,
+                 font=("Segoe UI", 8)).pack(side="left")
+        tk.Button(prev_inner, text="▶  START", bg=ui.ACCENT, fg=ui.BG,
+                  activebackground="#e2e2e2", activeforeground=ui.BG,
+                  relief="flat", font=("Segoe UI Black", 9), cursor="hand2",
+                  padx=16, pady=6, state="disabled",
+                  disabledforeground=ui.BG).pack(side="right")
         tk.Frame(f, bg=ui.BORDER2, height=1).pack(fill="x")
 
         outer, body = ui.scroll_frame(f, bg=ui.PANEL)

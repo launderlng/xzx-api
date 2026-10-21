@@ -17,7 +17,7 @@ PANEL    = "#0c0c0c"
 PANEL2   = "#000000"
 PANEL3   = "#161616"
 ACCENT   = "#ffffff"          # pure white — the one "bold" colour is no colour at all
-ACCENT2  = "#d9d9d9"
+ACCENT2  = "#ffffff"          # secondary accent — also pure white, no off-white/grey tint
 ACCENT3  = "#4d4d4d"
 FG       = "#ffffff"
 FG2      = "#c2c2c2"
@@ -31,7 +31,6 @@ RED2     = "#e0313f"
 CYAN     = "#b3b3b3"          # second macro accent — light grey, distinct from pure white
 ORANGE   = "#ffffff"
 YELLOW   = "#ffffff"
-PINK     = "#ffffff"
 TAB_UL   = ACCENT             # tab underline
 
 SIDEBAR_W = 52
@@ -170,7 +169,7 @@ THEME_PATH = suite_dir() / "xzx_theme.json"
 _PALETTE_KEYS = ["BG","GRAD1","GRAD2","GRAD3","PANEL","PANEL2","PANEL3",
                  "ACCENT","ACCENT2","ACCENT3","FG","FG2","MUTED",
                  "BORDER","BORDER2","GREEN","GREEN2","RED","RED2","CYAN",
-                 "ORANGE","YELLOW","PINK"]
+                 "ORANGE","YELLOW"]
 
 def load_theme_overrides():
     """Saved colour overrides from disk, filtered to known palette keys
@@ -512,7 +511,7 @@ class ToggleButton:
         self._sbg = start_bg;   self._ebg = stop_bg
         self.btn = tk.Button(parent, text=start_label,
                              bg=start_bg, fg=BG,
-                             activebackground=ACCENT, activeforeground=BG,
+                             activebackground="#e2e2e2", activeforeground=BG,
                              relief="flat", font=("Segoe UI Black", 11),
                              cursor="hand2", pady=10, command=self._click)
 
@@ -523,14 +522,14 @@ class ToggleButton:
                                activebackground=RED2, activeforeground="white")
         else:
             self.btn.configure(text=self._sl, bg=self._sbg, fg=BG,
-                               activebackground=ACCENT, activeforeground=BG)
+                               activebackground="#e2e2e2", activeforeground=BG)
         self._cb(self._running)
 
     def force_stop(self):
         if self._running:
             self._running = False
             self.btn.configure(text=self._sl, bg=self._sbg, fg=BG,
-                               activebackground=ACCENT, activeforeground=BG)
+                               activebackground="#e2e2e2", activeforeground=BG)
 
 
 # ── status badge ──────────────────────────────────────────────────────────────
@@ -593,9 +592,9 @@ def accent_btn(parent, text, cmd, bg=ACCENT2, fg=BG, width=None):
     kw = {"width":width} if width else {}
     b = tk.Button(parent, text=text, command=cmd, bg=bg, fg=fg,
                   relief="flat", font=("Segoe UI Semibold",9), cursor="hand2",
-                  activebackground=ACCENT, activeforeground=BG,
+                  activebackground="#e2e2e2", activeforeground=BG,
                   pady=7, **kw)
-    b.bind("<Enter>", lambda e: b.configure(bg=ACCENT))
+    b.bind("<Enter>", lambda e: b.configure(bg="#e2e2e2"))  # subtle dim on hover (bg is pure white)
     b.bind("<Leave>", lambda e: b.configure(bg=bg))
     return b
 
