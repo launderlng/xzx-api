@@ -121,6 +121,140 @@ def get_monitors():
         return [("Monitor 1", 0, 0, 1920, 1080)]
 
 
+# ── global hotkeys ─────────────────────────────────────────────────────────────
+# A Tk <bind> only fires while the macro's own window has keyboard focus,
+# which is useless in practice — you're tabbed into the game, not the
+# macro. These poll the real OS key state instead, so Start/Stop/Close
+# work no matter which window is focused, the same way a normal in-game
+# hotkey does.
+VK_F5, VK_F6, VK_F7, VK_F8, VK_F9, VK_F10 = 0x74, 0x75, 0x76, 0x77, 0x78, 0x79
+
+def _key_is_down(vk):
+    try:
+        import ctypes
+        return bool(ctypes.windll.user32.GetAsyncKeyState(vk) & 0x8000)
+    except Exception:
+        return False
+
+
+class HotkeyWatcher:
+    """Edge-detects global key presses across repeated .poll() calls (e.g.
+    from a Tk .after() tick) so each physical press fires its action once,
+    not once per 50ms tick for as long as the key is held."""
+    def __init__(self):
+        self._down = {}
+
+    def pressed(self, vk):
+        now = _key_is_down(vk)
+        fired = now and not self._down.get(vk, False)
+        self._down[vk] = now
+        return fired
+
+
+# ── theme persistence (full-palette customisation, shared across the Hub
+# and every macro window, each running as its own separate process) ───────────
+import json as _json
+from pathlib import Path as _Path
+
+def suite_dir():
+    """The folder every XZX exe/script lives in together. Never __file__
+    for a frozen --onefile build — that resolves inside a throwaway
+    per-launch extraction folder, not the exe's real, stable folder (the
+    same distinction xzx_launcher.py's _launch() already draws)."""
+    if getattr(sys, "frozen", False):
+        return _Path(sys.executable).parent
+    return _Path(__file__).parent
+
+THEME_PATH = suite_dir() / "xzx_theme.json"
+
+_PALETTE_KEYS = ["BG","GRAD1","GRAD2","GRAD3","PANEL","PANEL2","PANEL3",
+                 "ACCENT","ACCENT2","ACCENT3","FG","FG2","MUTED",
+                 "BORDER","BORDER2","GREEN","GREEN2","RED","RED2","CYAN",
+                 "ORANGE","YELLOW","PINK"]
+
+def load_theme_overrides():
+    """Saved colour overrides from disk, filtered to known palette keys
+    with string (hex) values — never trusts the file blindly."""
+    try:
+        data = _json.loads(THEME_PATH.read_text())
+        return {k: v for k, v in data.items()
+                if k in _PALETTE_KEYS and isinstance(v, str)}
+    except Exception:
+        return {}
+
+def save_theme_overrides(values: dict) -> bool:
+    try:
+        THEME_PATH.write_text(_json.dumps(values, indent=2))
+        return True
+    except Exception:
+        return False
+
+def theme_mtime():
+    try:
+        return THEME_PATH.stat().st_mtime
+    except Exception:
+        return 0
+
+def apply_theme_overrides():
+    """Push saved overrides into this module's palette constants. Run once
+    below so the very first window built already reflects a saved theme —
+    including every StatTile/SideIconBtn/etc. default that's *bound* to a
+    palette constant, not just call-sites that pass ui.ACCENT explicitly,
+    since this runs before any of those classes/functions are defined."""
+    overrides = load_theme_overrides()
+    g = globals()
+    for k in _PALETTE_KEYS:
+        g[k] = overrides.get(k, g[k])
+    g["TAB_UL"] = g["ACCENT"]
+
+apply_theme_overrides()
+
+def reload_theme_module():
+    """A colour change needs more than re-running apply_theme_overrides():
+    every class/function above with a palette constant as a *default
+    argument* (StatTile's accent=ACCENT, SideIconBtn's active_color=ACCENT,
+    draw_gradient's c1=GRAD1, …) bound that default at definition time, so
+    reassigning the bare global afterwards doesn't reach them. Reloading
+    this whole module re-executes it top to bottom — literals reset, then
+    apply_theme_overrides() re-applies the saved colours, then every def
+    rebinds its defaults fresh. importlib.reload() mutates this module
+    object in place, so every `ui.xxx` a caller already holds (including
+    `import xzx_ui as ui` itself) sees the refreshed values with no need
+    to re-import."""
+    import importlib
+    importlib.reload(sys.modules[__name__])
+
+
+# ── scrollable settings list (for panels with more rows than fit) ─────────────
+def scroll_frame(parent, bg=PANEL):
+    """A vertically-scrollable area: pack/place the returned outer frame,
+    then add content to the returned inner frame as if it were a plain one."""
+    outer = tk.Frame(parent, bg=bg)
+    cv = tk.Canvas(outer, bg=bg, highlightthickness=0)
+    sb = tk.Scrollbar(outer, orient="vertical", command=cv.yview,
+                      bg=PANEL2, troughcolor=PANEL, activebackground=ACCENT2,
+                      relief="flat", width=8)
+    cv.configure(yscrollcommand=sb.set)
+    cv.pack(side="left", fill="both", expand=True)
+    sb.pack(side="right", fill="y")
+    inner = tk.Frame(cv, bg=bg)
+    win = cv.create_window((0, 0), window=inner, anchor="nw")
+    def _on_inner_config(e): cv.configure(scrollregion=cv.bbox("all"))
+    def _on_canvas_config(e): cv.itemconfigure(win, width=e.width)
+    inner.bind("<Configure>", _on_inner_config)
+    cv.bind("<Configure>", _on_canvas_config)
+    def _wheel(e):
+        cv.yview_scroll(-1 * (1 if e.delta > 0 else -1), "units")
+    # Bind/unbind the wheel only while the pointer is actually over this
+    # canvas (not bind_all) — otherwise scrolling anywhere else in the
+    # window, including other tabs, would hijack this scrollbar.
+    def _enter(e): cv.bind_all("<MouseWheel>", _wheel)
+    def _leave(e): cv.unbind_all("<MouseWheel>")
+    cv.bind("<Enter>", _enter)
+    cv.bind("<Leave>", _leave)
+    return outer, inner
+
+
 # ── gradient canvas helper ────────────────────────────────────────────────────
 def draw_gradient(canvas, w, h, c1=GRAD1, c2=GRAD3, steps=60, diagonal=False):
     """Fill canvas with a top→bottom (or diagonal) gradient."""

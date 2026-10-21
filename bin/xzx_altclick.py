@@ -104,6 +104,9 @@ class AltClickMacro(ui.Draggable):
         self.running = False
         self.clicks  = 0
         self._thread = None
+        self._hotkeys = ui.HotkeyWatcher()
+        self._theme_mtime = ui.theme_mtime()
+        self._cur_tab = 0
 
         self.root = tk.Tk()
         self.root.geometry(f"{WIN_W}x{WIN_H}")
@@ -111,8 +114,35 @@ class AltClickMacro(ui.Draggable):
         self._center()
         ui.frameless(self.root, WIN_W, WIN_H, radius=20)
         self._build()
-        self.root.bind("<F9>", lambda e: self._toggle())
         self.root.protocol("WM_DELETE_WINDOW", self._quit)
+        self._hotkey_poll()
+
+    def _hotkey_poll(self):
+        # Polled key state, not Tk <bind> — fires while the game window
+        # has focus, not just while this macro window is focused.
+        if self._hotkeys.pressed(ui.VK_F9): self._toggle()
+        if self._hotkeys.pressed(ui.VK_F10):
+            self._quit(); return
+        m = ui.theme_mtime()
+        if m != self._theme_mtime:
+            self._theme_mtime = m
+            self._rebuild_theme()
+        self.root.after(50, self._hotkey_poll)
+
+    def _rebuild_theme(self):
+        """Picks up a colour change saved from the Hub's Theme tab and
+        rebuilds this window in place, without touching the running click
+        thread or its counters."""
+        ui.reload_theme_module()
+        for w in self.root.winfo_children():
+            w.destroy()
+        self.root.configure(bg=ui.BG)
+        self._build()
+        self._tab(self._cur_tab)
+        if self.running:
+            self.badge.set("Running", ui.GREEN)
+            self._tbtn.btn.configure(text="■  STOP CLICKING", bg=ui.RED, fg="white")
+            self._tbtn._running = True
 
     def _center(self):
         self.root.update_idletasks()
@@ -189,13 +219,14 @@ class AltClickMacro(ui.Draggable):
 
         hr = tk.Frame(body, bg=ui.PANEL)
         hr.pack(fill="x", pady=(10,0))
-        kg = tk.Frame(hr, bg=ui.PANEL); kg.pack(side="left", padx=(0,6))
-        tk.Label(kg, text="F9", bg=ui.PANEL2, fg=ui.FG2,
-                 font=("Consolas",8), padx=6, pady=3,
-                 highlightbackground=ui.BORDER2,
-                 highlightthickness=1).pack(side="left")
-        tk.Label(kg, text="Toggle", bg=ui.PANEL, fg=ui.MUTED,
-                 font=("Segoe UI",8)).pack(side="left", padx=3)
+        for k, txt in [("F9","Toggle"), ("F10","Close")]:
+            kg = tk.Frame(hr, bg=ui.PANEL); kg.pack(side="left", padx=(0,6))
+            tk.Label(kg, text=k, bg=ui.PANEL2, fg=ui.FG2,
+                     font=("Consolas",8), padx=6, pady=3,
+                     highlightbackground=ui.BORDER2,
+                     highlightthickness=1).pack(side="left")
+            tk.Label(kg, text=txt, bg=ui.PANEL, fg=ui.MUTED,
+                     font=("Segoe UI",8)).pack(side="left", padx=3)
 
         tk.Frame(body, bg=ui.BORDER2, height=1).pack(fill="x", pady=(10,4))
         self._log, sb2 = ui.log_box(body, height=5)
@@ -256,6 +287,7 @@ class AltClickMacro(ui.Draggable):
         return f
 
     def _tab(self, idx):
+        self._cur_tab = idx
         for i, btn in enumerate(self._stabs): btn.set_active(i == idx)
         for i, v in enumerate(self._views):
             if i == idx: v.place(x=0,y=0,relwidth=1,relheight=1); v.lift()

@@ -14,6 +14,7 @@ deliberately does NOT do — no file deletion, no drive scanning):
     magnet on machines with antivirus/EDR software, not a real gate
 """
 import tkinter as tk
+from tkinter import colorchooser
 import threading, subprocess, os, sys, json, hashlib, time, webbrowser, random, hmac
 import urllib.parse, urllib.request
 from pathlib import Path
@@ -200,15 +201,15 @@ MACROS = [
     {"id":"fishing",  "icon":"🎣", "name":"Fishing",
      "color": ui.CYAN,   "file":"xzx_fishing.py",  "exe":"XZX Fishing.exe",
      "desc":"Auto-detects fish bite and casts/reels for you in FiveM.",
-     "keys":["F5 Start","F6 Stop"]},
+     "keys":["F5 Start","F6 Stop","F10 Close"]},
     {"id":"metal",    "icon":"🔍", "name":"Metal Detector",
      "color": ui.ACCENT, "file":"xzx_metal.py",    "exe":"XZX Metal.exe",
      "desc":"GDI pixel scan — auto skill-check on metal detector minigame.",
-     "keys":["F7 Start","F8 Stop"]},
+     "keys":["F7 Start","F8 Stop","F10 Close"]},
     {"id":"altclick", "icon":"🖱️", "name":"Alt Click",
      "color": ui.GREEN,  "file":"xzx_altclick.py", "exe":"XZX AltClick.exe",
      "desc":"Hold-Alt auto-click macro with configurable CPS.",
-     "keys":["F9 Toggle"]},
+     "keys":["F9 Toggle","F10 Close"]},
 ]
 MACRO_IDS = [m["id"] for m in MACROS]
 
@@ -896,6 +897,12 @@ class HubWindow(Draggable):
             btn.bind("<Button-1>", lambda e, mid=m["id"]: self._show(mid))
             self._sbtns[m["id"]] = btn
 
+        # Theme tab — not a macro, lives in the same sidebar/panel switcher
+        theme_btn = ui.SideIconBtn(sb, "🎨", "Theme", active_color=ui.ACCENT)
+        theme_btn.frame.pack(fill="x")
+        theme_btn.bind("<Button-1>", lambda e: self._show("theme"))
+        self._sbtns["theme"] = theme_btn
+
         tk.Frame(sb, bg=ui.BORDER, height=1).pack(fill="x", pady=(8,0))
 
         # bottom spacer so nothing sits inside the rounded bottom-left corner
@@ -937,6 +944,7 @@ class HubWindow(Draggable):
         self._panels = {}
         for m in self.owned_list:
             self._panels[m["id"]] = self._mk_panel(m, cw, ch)
+        self._panels["theme"] = self._mk_theme_panel(cw, ch)
         self._link_panel = self._mk_link_panel(cw, ch)
 
         if self.linked:
@@ -1016,6 +1024,107 @@ class HubWindow(Draggable):
         tk.Label(body, text="Opens your browser to authorise. Come back when done.",
                  bg=ui.PANEL, fg=ui.BORDER, font=("Segoe UI", 7)).pack(pady=(10,0))
         return f
+
+    # ── theme panel (full-palette customisation) ─────────────────────────────────
+    _THEME_GROUPS = [
+        ("Backgrounds", [("BG","Window background"), ("GRAD1","Gradient start"),
+                          ("GRAD2","Gradient middle"), ("GRAD3","Gradient end"),
+                          ("PANEL","Panel"), ("PANEL2","Panel (dark)"),
+                          ("PANEL3","Panel (light)")]),
+        ("Accent", [("ACCENT","Primary accent"), ("ACCENT2","Accent (dim)"),
+                    ("ACCENT3","Accent (muted)")]),
+        ("Text", [("FG","Primary text"), ("FG2","Secondary text"),
+                  ("MUTED","Muted text")]),
+        ("Borders", [("BORDER","Border"), ("BORDER2","Border (faint)")]),
+        ("Status", [("GREEN","Success / running"), ("GREEN2","Success (dim)"),
+                    ("RED","Error / stop"), ("RED2","Error (dim)")]),
+        ("Macro accents", [("CYAN","Fishing accent"), ("ORANGE","Orange accent"),
+                            ("YELLOW","Yellow accent"), ("PINK","Pink accent")]),
+    ]
+
+    def _mk_theme_panel(self, w, h):
+        f = tk.Frame(self.cont, bg=ui.PANEL, width=w, height=h)
+        f.pack_propagate(False)
+
+        tk.Frame(f, bg=ui.ACCENT, height=3).pack(fill="x")
+
+        hdr = tk.Frame(f, bg=ui.PANEL2, height=52)
+        hdr.pack(fill="x"); hdr.pack_propagate(False)
+        tk.Label(hdr, text="🎨", bg=ui.PANEL2, fg=ui.ACCENT,
+                 font=("Segoe UI Emoji", 22)).place(x=18, rely=0.5, anchor="w")
+        info = tk.Frame(hdr, bg=ui.PANEL2)
+        info.place(x=58, rely=0.5, anchor="w")
+        tk.Label(info, text="APPEARANCE", bg=ui.PANEL2, fg=ui.FG,
+                 font=("Segoe UI Black", 13)).pack(anchor="w")
+        tk.Label(info, text="Changes every colour here, the Hub and all 3 macros",
+                 bg=ui.PANEL2, fg=ui.MUTED, font=("Segoe UI", 8)).pack(anchor="w")
+        reset_btn = tk.Button(hdr, text="Reset to default", bg=ui.PANEL2, fg=ui.MUTED,
+                              activebackground=ui.PANEL3, activeforeground=ui.FG,
+                              relief="flat", font=("Segoe UI", 8), cursor="hand2",
+                              padx=10, pady=4, highlightbackground=ui.BORDER2,
+                              highlightthickness=1, command=self._reset_theme)
+        reset_btn.place(relx=1.0, rely=0.5, anchor="e", x=-14)
+
+        tk.Frame(f, bg=ui.BORDER2, height=1).pack(fill="x")
+
+        outer, body = ui.scroll_frame(f, bg=ui.PANEL)
+        outer.pack(fill="both", expand=True, padx=4, pady=4)
+        pad = tk.Frame(body, bg=ui.PANEL, width=20); pad.pack(side="left", fill="y")
+        col = tk.Frame(body, bg=ui.PANEL); col.pack(side="left", fill="both", expand=True, pady=14)
+
+        for title, rows in self._THEME_GROUPS:
+            ui.section_label(col, title, bg=ui.PANEL)
+            for key, label in rows:
+                self._mk_colour_row(col, key, label)
+        tk.Frame(col, bg=ui.PANEL, height=14).pack()
+        return f
+
+    def _mk_colour_row(self, parent, key, label):
+        r = tk.Frame(parent, bg=ui.PANEL); r.pack(fill="x", pady=4, padx=(0,16))
+        tk.Label(r, text=label, bg=ui.PANEL, fg=ui.FG2,
+                 font=("Segoe UI", 9)).pack(side="left")
+        tk.Label(r, text=getattr(ui, key), bg=ui.PANEL, fg=ui.MUTED,
+                 font=("Consolas", 8)).pack(side="right", padx=(0,8))
+        swatch = tk.Label(r, text="  ", bg=getattr(ui, key),
+                          highlightbackground=ui.BORDER, highlightthickness=1,
+                          cursor="hand2", padx=12, pady=4)
+        swatch.pack(side="right")
+        swatch.bind("<Button-1>", lambda e, k=key: self._pick_colour(k))
+
+    def _pick_colour(self, key):
+        current = getattr(ui, key)
+        try:
+            _, hexv = colorchooser.askcolor(color=current, parent=self.root,
+                                            title=f"Choose {key}")
+        except Exception:
+            hexv = None
+        if not hexv:
+            return
+        overrides = ui.load_theme_overrides()
+        overrides[key] = hexv
+        ui.save_theme_overrides(overrides)
+        self._reload_theme_live()
+
+    def _reset_theme(self):
+        ui.save_theme_overrides({})
+        self._reload_theme_live()
+
+    def _reload_theme_live(self):
+        """Reload the shared ui module so every colour — including the ones
+        baked into widget-class defaults, not just explicit ui.X lookups —
+        picks up the change, then rebuild this window from scratch so it's
+        visible immediately. The 3 macro windows are separate processes;
+        each notices the theme file changed on its own poll and does the
+        same (see _watch_theme in xzx_fishing.py / xzx_metal.py / xzx_altclick.py)."""
+        ui.reload_theme_module()
+        self._rebuild()
+
+    def _rebuild(self):
+        for w in self.root.winfo_children():
+            w.destroy()
+        self.root.configure(bg=ui.BG)
+        self._build()
+        self._show(getattr(self, "_active_tab", "theme"))
 
     # ── macro panel ────────────────────────────────────────────────────────────
     def _mk_panel(self, m, w, h):
@@ -1151,6 +1260,7 @@ class HubWindow(Draggable):
         _check_debugger()
         if not self.linked:
             self._show_link_prompt(); return
+        self._active_tab = mid
         self._link_panel.place_forget()
         for _id, btn in self._sbtns.items(): btn.set_active(_id == mid)
         for _id, panel in self._panels.items():

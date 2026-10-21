@@ -268,7 +268,6 @@ def keep_score(img):
 SCANCODES = {"1": 0x02, "2": 0x03, "3": 0x04, "4": 0x05, "5": 0x06,
              "6": 0x07, "7": 0x08, "8": 0x09, "9": 0x0A, "0": 0x0B,
              "q": 0x10, "e": 0x12, "r": 0x13}
-VK_F8, VK_F10 = 0x77, 0x79
 
 if IS_WIN:
     try:
@@ -302,21 +301,9 @@ if IS_WIN:
         inp = INPUT(type=1)
         inp.u.ki = KEYBDINPUT(0, scan, flags, 0, None)
         ctypes.windll.user32.SendInput(1, ctypes.byref(inp), ctypes.sizeof(inp))
-
-    _was_down = {}
-
-    def hotkey_pressed(vk):
-        """True once each time the key goes down."""
-        down = bool(ctypes.windll.user32.GetAsyncKeyState(vk) & 0x8000)
-        fired = down and not _was_down.get(vk, False)
-        _was_down[vk] = down
-        return fired
 else:
     def _send(scan, up):
         pass
-
-    def hotkey_pressed(vk):
-        return False
 
 
 class Keys:
@@ -687,6 +674,9 @@ class FishingMacro(ui.Draggable):
         self.f = Fisher(self.q, monitor_provider=self._get_monitor)
         self._start_ts = None
         self._run_seconds = 0.0
+        self._hotkeys = ui.HotkeyWatcher()
+        self._theme_mtime = ui.theme_mtime()
+        self._cur_tab = 0
 
         self.root = tk.Tk()
         self.root.geometry(f"{WIN_W}x{WIN_H}")
@@ -694,8 +684,6 @@ class FishingMacro(ui.Draggable):
         self._center()
         ui.frameless(self.root, WIN_W, WIN_H, radius=20)
         self._build()
-        self.root.bind("<F5>", lambda e: self._start())
-        self.root.bind("<F6>", lambda e: self._stop())
         self.root.protocol("WM_DELETE_WINDOW", self._quit)
 
         threading.Thread(target=self.f.thread_main, daemon=True).start()
@@ -760,7 +748,7 @@ class FishingMacro(ui.Draggable):
                                         stop_bg=ui.RED)
         self._toggle.btn.pack(fill="x", ipady=4); self._toggle.btn.configure(fg=ui.BG)
         hr = tk.Frame(body, bg=ui.PANEL); hr.pack(fill="x", pady=(8,0))
-        for k, txt in [("F5","Start"), ("F6","Stop")]:
+        for k, txt in [("F5","Start"), ("F6","Stop"), ("F10","Close")]:
             kg = tk.Frame(hr, bg=ui.PANEL); kg.pack(side="left", padx=(0,6))
             tk.Label(kg, text=k, bg=ui.PANEL2, fg=ui.FG2, font=("Consolas",8), padx=6, pady=3,
                      highlightbackground=ui.BORDER2, highlightthickness=1).pack(side="left")
@@ -832,10 +820,28 @@ class FishingMacro(ui.Draggable):
         return f
 
     def _tab(self, idx):
+        self._cur_tab = idx
         for i, btn in enumerate(self._stabs): btn.set_active(i == idx)
         for i, v in enumerate(self._views):
             if i == idx: v.place(x=0, y=0, relwidth=1, relheight=1); v.lift()
             else: v.place_forget()
+
+    # ── live theme reload ───────────────────────────────────────────────────
+    def _rebuild_theme(self):
+        """A colour change in the Hub writes the shared theme file; pick it
+        up here (reload ui so widget-default colours refresh too, not just
+        explicit ui.X lookups) and rebuild this window in place, without
+        touching the running engine thread or its counters."""
+        ui.reload_theme_module()
+        for w in self.root.winfo_children():
+            w.destroy()
+        self.root.configure(bg=ui.BG)
+        self._build()
+        self._tab(self._cur_tab)
+        if self.f.running.is_set():
+            self.badge.set("Running", ui.GREEN)
+            self._toggle.btn.configure(text="■  STOP FISHING", bg=ui.RED, fg="white")
+            self._toggle._running = True
 
     # ── start/stop ───────────────────────────────────────────────────────────
     def _on_toggle(self, running):
@@ -863,6 +869,17 @@ class FishingMacro(ui.Draggable):
 
     # ── queue drain / UI tick ───────────────────────────────────────────────
     def _tick(self):
+        # Global hotkeys — polled key state, not Tk <bind>, so these fire
+        # while the game window has focus, not just the macro window.
+        if self._hotkeys.pressed(ui.VK_F5): self._start()
+        if self._hotkeys.pressed(ui.VK_F6): self._stop()
+        if self._hotkeys.pressed(ui.VK_F10): self._quit(); return
+        m = ui.theme_mtime()
+        if m != self._theme_mtime:
+            self._theme_mtime = m
+            self._rebuild_theme()
+            self.root.after(50, self._tick)
+            return
         try:
             while True:
                 msg = self.q.get_nowait()
