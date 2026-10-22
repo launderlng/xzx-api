@@ -286,9 +286,12 @@ class LoginWindow(Draggable):
 
         # product name
         tk.Label(wrap, text="XZX LAUNCHER", bg=ui.BG, fg=ui.FG,
-                 font=("Segoe UI Black", 21)).pack()
+                 font=("Segoe UI Black", 22)).pack()
         tk.Label(wrap, text="MEMBERS AREA", bg=ui.BG, fg=ui.ACCENT,
-                 font=("Segoe UI Semibold", 9)).pack(pady=(3, 24))
+                 font=("Segoe UI Semibold", 9)).pack(pady=(3, 4))
+        tk.Label(wrap, text="Fishing  ·  Metal Detector  ·  Alt-Click",
+                 bg=ui.BG, fg=ui.MUTED,
+                 font=("Segoe UI", 8)).pack(pady=(0, 22))
 
         # ── single content panel — part of the one rounded window,        ─
         # ── no nested card / shadow, just a clean flat section ───────────
@@ -297,7 +300,7 @@ class LoginWindow(Draggable):
         card.configure(width=CARD_W)
         card.pack()
         cbody = card.body
-        tk.Frame(cbody, bg=ui.ACCENT, height=2).pack(fill="x")
+        tk.Frame(cbody, bg=ui.ACCENT, height=3).pack(fill="x")
 
         inn = tk.Frame(cbody, bg=ui.PANEL)
         inn.pack(fill="both", expand=True, padx=26, pady=26)
@@ -404,11 +407,12 @@ class LoginWindow(Draggable):
             self._setstatus(f"Previous session: {tag} — re-authorise to continue", ui.MUTED)
 
     def _draw_logo(self, cv, w, h):
-        # No shape, no glow rings, no second layer behind it — just the
-        # wordmark sitting directly on the starfield canvas underneath it.
+        # A soft glow behind the wordmark — the one bit of "premium" weight
+        # on this screen, sitting on the same canvas as the falling snow.
         cx, cy = w // 2, h // 2
+        ui.glow(cv, cx, cy, 30, colour=ui.ACCENT, rings=3)
         cv.create_text(cx, cy, text="XZX", fill=ui.FG,
-                       font=("Segoe UI Black", 22))
+                       font=("Segoe UI Black", 26))
 
     def _paint_bg(self):
         # one flat layer: pure black, nothing drawn under or behind it —
@@ -808,10 +812,15 @@ class HubWindow(Draggable):
 
     # ── build ──────────────────────────────────────────────────────────────────
     def _build(self):
-        # one flat black layer — no gradient, nothing floating behind it
+        # one flat black layer — no gradient, nothing floating behind it —
+        # plus a light snowfall so the sidebar/content "card" below reads
+        # as floating over the background instead of being the window.
+        M = 14  # margin left around the sidebar+content card
         bgcv = tk.Canvas(self.root, width=HUB_W, height=HUB_H,
                          highlightthickness=0, bg=ui.BG)
         bgcv.place(x=0, y=0)
+        self._snow = ui.Snowfall(bgcv, HUB_W, HUB_H, count=55)
+        self._snow.start()
 
         # ── custom title bar ──────────────────────────────────────────────
         bar = tk.Frame(self.root, bg=ui.PANEL2,
@@ -849,7 +858,7 @@ class HubWindow(Draggable):
         SB_Y = 34
         sb = tk.Frame(self.root, bg=ui.PANEL2,
                       highlightbackground=ui.BORDER, highlightthickness=1)
-        sb.place(x=0, y=SB_Y, width=ui.SIDEBAR_W, height=HUB_H-SB_Y)
+        sb.place(x=M, y=SB_Y, width=ui.SIDEBAR_W, height=HUB_H-SB_Y-M)
         sb.pack_propagate(False)
 
         logo_sb = tk.Canvas(sb, width=ui.SIDEBAR_W, height=60,
@@ -865,14 +874,8 @@ class HubWindow(Draggable):
             btn.frame.pack(fill="x")
             btn.bind("<Button-1>", lambda e, mid=m["id"]: self._show(mid))
             self._sbtns[m["id"]] = btn
-
-        # Theme tab — not a macro, lives in the same sidebar/panel switcher
-        theme_btn = ui.SideIconBtn(sb, "🎨", "Theme", active_color=ui.ACCENT)
-        theme_btn.frame.pack(fill="x")
-        theme_btn.bind("<Button-1>", lambda e: self._show("theme"))
-        self._sbtns["theme"] = theme_btn
-
-        tk.Frame(sb, bg=ui.BORDER, height=1).pack(fill="x", pady=(8,0))
+        # The Hub only ever opens macros now — no Theme tab sitting beside
+        # them as a second, unrelated section. One clean list, one job.
 
         # bottom spacer so nothing sits inside the rounded bottom-left corner
         tk.Frame(sb, bg=ui.PANEL2, height=14).pack(fill="x", side="bottom")
@@ -904,16 +907,15 @@ class HubWindow(Draggable):
         self._disc_ico.bind("<Button-1>", lambda e: self._link_discord())
 
         # ── content area ──────────────────────────────────────────────────
-        cx = ui.SIDEBAR_W + 1
-        cw = HUB_W - cx
-        ch = HUB_H - SB_Y
+        cx = M + ui.SIDEBAR_W + 1
+        cw = HUB_W - cx - M
+        ch = HUB_H - SB_Y - M
         self.cont = tk.Frame(self.root, bg=ui.PANEL)
         self.cont.place(x=cx, y=SB_Y, width=cw, height=ch)
 
         self._panels = {}
         for m in self.owned_list:
             self._panels[m["id"]] = self._mk_panel(m, cw, ch)
-        self._panels["theme"] = self._mk_theme_panel(cw, ch)
         self._link_panel = self._mk_link_panel(cw, ch)
 
         if self.linked:
@@ -1107,7 +1109,7 @@ class HubWindow(Draggable):
             w.destroy()
         self.root.configure(bg=ui.BG)
         self._build()
-        self._show(getattr(self, "_active_tab", "theme"))
+        self._show(getattr(self, "_active_tab", self.owned_list[0]["id"] if self.owned_list else None))
 
     # ── macro panel ────────────────────────────────────────────────────────────
     def _mk_panel(self, m, w, h):

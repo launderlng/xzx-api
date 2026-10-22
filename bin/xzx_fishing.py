@@ -59,7 +59,7 @@ def _gate():
 _gate()
 # ─────────────────────────────────────────────────────────────────────────────
 
-WIN_W, WIN_H = 440, 560
+WIN_W, WIN_H = 380, 480   # launches smaller than before — a compact window, not a second Hub
 
 
 def _ensure_deps():
@@ -703,13 +703,16 @@ class FishingMacro(ui.Draggable):
 
     # ── layout ───────────────────────────────────────────────────────────────
     def _build(self):
+        M = 10  # margin around the sidebar+content card — lets the snowfall behind it show
         bgcv = tk.Canvas(self.root, width=WIN_W, height=WIN_H, highlightthickness=0, bg=ui.BG)
         bgcv.place(x=0, y=0)
+        self._snow = ui.Snowfall(bgcv, WIN_W, WIN_H, count=36)
+        self._snow.start()
         self.badge = ui.macro_header(self, WIN_W, "🎣", "FISHING MACRO", ui.CYAN)
         tk.Frame(self.root, bg=ui.CYAN, height=2).place(x=0, y=ui.HEADER_H, width=WIN_W)
 
         sb = tk.Frame(self.root, bg=ui.PANEL2, highlightbackground=ui.BORDER, highlightthickness=1)
-        sb.place(x=0, y=ui.HEADER_H+2, width=ui.SIDEBAR_W, height=WIN_H-ui.HEADER_H-2)
+        sb.place(x=M, y=ui.HEADER_H+2, width=ui.SIDEBAR_W, height=WIN_H-ui.HEADER_H-2-M)
         self._stabs = []
         for i, (ico, name) in enumerate([("🎣", "Macro"), ("📊", "Stats"), ("⚙", "Settings")]):
             btn = ui.SideIconBtn(sb, ico, name, active_color=ui.CYAN)
@@ -717,7 +720,7 @@ class FishingMacro(ui.Draggable):
             btn.bind("<Button-1>", lambda e, idx=i: self._tab(idx))
             self._stabs.append(btn)
 
-        cx = ui.SIDEBAR_W+1; cw = WIN_W-cx; ch = WIN_H-ui.HEADER_H-2
+        cx = M+ui.SIDEBAR_W+1; cw = WIN_W-cx-M; ch = WIN_H-ui.HEADER_H-2-M
         self.cont = tk.Frame(self.root, bg=ui.PANEL)
         self.cont.place(x=cx, y=ui.HEADER_H+2, width=cw, height=ch)
         v0 = self._mk_macro_view(cw, ch)

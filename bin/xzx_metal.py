@@ -51,7 +51,7 @@ def _gate():
 _gate()
 # ─────────────────────────────────────────────────────────────────────────────
 
-WIN_W, WIN_H = 440, 540
+WIN_W, WIN_H = 380, 460   # launches smaller than before — a compact window, not a second Hub
 
 # ── GDI pixel colour ──────────────────────────────────────────────────────────
 def _get_pixel(x, y):
@@ -146,10 +146,13 @@ class MetalMacro(ui.Draggable):
         self.root.geometry(f"{WIN_W}x{WIN_H}+{(sw-WIN_W)//2}+{(sh-WIN_H)//2}")
 
     def _build(self):
+        M = 10  # margin around the sidebar+content card — lets the snowfall behind it show
         bgcv = tk.Canvas(self.root, width=WIN_W, height=WIN_H,
                          highlightthickness=0, bg=ui.BG)
         bgcv.place(x=0, y=0)
         bgcv.configure(bg=ui.BG)   # flat black — matches the launcher/Hub theme now
+        self._snow = ui.Snowfall(bgcv, WIN_W, WIN_H, count=36)
+        self._snow.start()
 
         # header
         self.badge = ui.macro_header(self, WIN_W, "🔍", "METAL DETECTOR", ui.ACCENT)
@@ -160,8 +163,8 @@ class MetalMacro(ui.Draggable):
         # sidebar
         sb = tk.Frame(self.root, bg=ui.PANEL2,
                       highlightbackground=ui.BORDER, highlightthickness=1)
-        sb.place(x=0, y=ui.HEADER_H+2,
-                 width=ui.SIDEBAR_W, height=WIN_H-ui.HEADER_H-2)
+        sb.place(x=M, y=ui.HEADER_H+2,
+                 width=ui.SIDEBAR_W, height=WIN_H-ui.HEADER_H-2-M)
 
         self._stabs = []
         for i,(ico,name) in enumerate([("🔍","Macro"),("📊","Stats"),("⚙","Settings")]):
@@ -170,9 +173,9 @@ class MetalMacro(ui.Draggable):
             btn.bind("<Button-1>", lambda e, idx=i: self._tab(idx))
             self._stabs.append(btn)
 
-        cx = ui.SIDEBAR_W+1
-        cw = WIN_W - cx
-        ch = WIN_H - ui.HEADER_H - 2
+        cx = M+ui.SIDEBAR_W+1
+        cw = WIN_W - cx - M
+        ch = WIN_H - ui.HEADER_H - 2 - M
         self.cont = tk.Frame(self.root, bg=ui.PANEL)
         self.cont.place(x=cx, y=ui.HEADER_H+2, width=cw, height=ch)
 
