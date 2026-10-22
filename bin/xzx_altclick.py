@@ -150,19 +150,19 @@ class AltClickMacro(ui.Draggable):
         self.root.geometry(f"{WIN_W}x{WIN_H}+{(sw-WIN_W)//2}+{(sh-WIN_H)//2}")
 
     def _build(self):
-        M = 22  # margin around the sidebar+content card, all 4 sides — a
+        M = 28  # margin around the sidebar+content card, all 4 sides — a
                 # real band of visible background, not a thin edge sliver
         bgcv = tk.Canvas(self.root, width=WIN_W, height=WIN_H,
                          highlightthickness=0, bg=ui.BG)
         bgcv.place(x=0, y=0)
         bgcv.configure(bg=ui.BG)   # flat black — matches the launcher/Hub theme now
-        self._snow = ui.Snowfall(bgcv, WIN_W, WIN_H, count=46)
+        self._snow = ui.Snowfall(bgcv, WIN_W, WIN_H, count=90)
         self._snow.start()
 
         # header
-        self.badge = ui.macro_header(self, WIN_W, "🖱️", "ALT CLICK MACRO", ui.GREEN)
+        self.badge = ui.macro_header(self, WIN_W, "🖱️", "ALT CLICK MACRO", ui.ACCENT)
 
-        tk.Frame(self.root, bg=ui.GREEN, height=2).place(
+        tk.Frame(self.root, bg=ui.ACCENT, height=2).place(
             x=0, y=ui.HEADER_H, width=WIN_W)
 
         # sidebar
@@ -174,7 +174,7 @@ class AltClickMacro(ui.Draggable):
 
         self._stabs = []
         for i,(ico,name) in enumerate([("🖱️","Macro"),("📊","Stats"),("⚙","Settings")]):
-            btn = ui.SideIconBtn(sb, ico, name, active_color=ui.GREEN)
+            btn = ui.SideIconBtn(sb, ico, name, active_color=ui.ACCENT)
             btn.frame.pack(fill="x")
             btn.bind("<Button-1>", lambda e, idx=i: self._tab(idx))
             self._stabs.append(btn)
@@ -197,7 +197,7 @@ class AltClickMacro(ui.Draggable):
         body = tk.Frame(f, bg=ui.PANEL)
         body.pack(fill="both", expand=True, padx=20, pady=16)
 
-        tk.Label(body, text="🖱️", bg=ui.PANEL, fg=ui.GREEN,
+        tk.Label(body, text="🖱️", bg=ui.PANEL, fg=ui.ACCENT,
                  font=("Segoe UI Emoji", 36)).pack(pady=(8,4))
         tk.Label(body, text="Alt-Click Macro", bg=ui.PANEL, fg=ui.FG,
                  font=("Segoe UI Black", 14)).pack()
@@ -208,7 +208,7 @@ class AltClickMacro(ui.Draggable):
 
         tiles = tk.Frame(body, bg=ui.PANEL)
         tiles.pack(fill="x", pady=12)
-        self._t_clicks = ui.StatTile(tiles, "CLICKS", "0", accent=ui.GREEN)
+        self._t_clicks = ui.StatTile(tiles, "CLICKS", "0", accent=ui.ACCENT)
         self._t_clicks.frame.pack(side="left", expand=True, fill="both", padx=(0,4))
         self._t_cps = ui.StatTile(tiles, "CPS", "0.0", accent=ui.CYAN)
         self._t_cps.frame.pack(side="left", expand=True, fill="both", padx=(4,0))
@@ -218,7 +218,7 @@ class AltClickMacro(ui.Draggable):
         self._tbtn = ui.ToggleButton(body, self._on_toggle,
                                       start_label="▶  START CLICKING",
                                       stop_label="■  STOP CLICKING",
-                                      start_bg=ui.GREEN2, stop_bg=ui.RED)
+                                      start_bg=ui.ACCENT, stop_bg=ui.RED)
         self._tbtn.btn.pack(fill="x", ipady=4)
         self._tbtn.btn.configure(fg=ui.BG)
 

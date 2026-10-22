@@ -143,15 +143,19 @@ class Snowfall:
         self._flakes = [self._new_flake(y=random.uniform(0, h)) for _ in range(count)]
 
     def _new_flake(self, y=None):
-        r = random.choice([1, 1, 1, 2, 2, 3])
+        r = random.choice([1, 2, 2, 2, 3, 3, 4])
         return {
             "x": random.uniform(0, self.w),
             "y": y if y is not None else -4,
             "r": r,
-            "vy": random.uniform(0.15, 0.45) * (1 + r * 0.12),
+            "vy": random.uniform(0.2, 0.55) * (1 + r * 0.12),
             "sway": random.uniform(0.3, 1.0),
             "phase": random.uniform(0, 2 * math.pi),
-            "shade": random.choice([MUTED, FG2, FG2, FG]),
+            "shade": random.choice([FG2, FG2, FG, FG]),  # brighter — a bare
+                                                           # couple pixels of
+                                                           # MUTED grey just
+                                                           # didn't read as
+                                                           # snow at a glance
             "id": None,
         }
 
@@ -400,6 +404,40 @@ def reload_theme_module():
     to re-import."""
     import importlib
     importlib.reload(sys.modules[__name__])
+
+
+def swatch_grid(parent, colours, current, on_pick, bg=None, size=26):
+    """A wrapping row of clickable round colour swatches — the in-theme
+    replacement for popping the native OS colour-chooser dialog, which
+    looks jarringly out of place against this UI. `current` is the
+    presently-selected hex colour (gets a ring drawn around its swatch);
+    `on_pick(hex)` fires when the user clicks a different one."""
+    pbg = bg if bg is not None else parent["bg"]
+    wrap = tk.Frame(parent, bg=pbg)
+    state = {"current": (current or "").lower()}
+    canvases = {}
+
+    def _redraw():
+        for hexv, cv in canvases.items():
+            cv.delete("all")
+            selected = hexv.lower() == state["current"]
+            round_rect(cv, 2, 2, size - 2, size - 2, r=size // 2,
+                       fill=hexv, outline=FG if selected else BORDER,
+                       width=2 if selected else 1)
+
+    def _pick(hexv):
+        state["current"] = hexv.lower()
+        _redraw()
+        on_pick(hexv)
+
+    for hexv in colours:
+        cv = tk.Canvas(wrap, width=size, height=size, bg=pbg,
+                       highlightthickness=0, cursor="hand2")
+        cv.pack(side="left", padx=4, pady=4)
+        cv.bind("<Button-1>", lambda e, h=hexv: _pick(h))
+        canvases[hexv] = cv
+    _redraw()
+    return wrap
 
 
 # ── scrollable settings list (for panels with more rows than fit) ─────────────

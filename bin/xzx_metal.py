@@ -146,13 +146,13 @@ class MetalMacro(ui.Draggable):
         self.root.geometry(f"{WIN_W}x{WIN_H}+{(sw-WIN_W)//2}+{(sh-WIN_H)//2}")
 
     def _build(self):
-        M = 22  # margin around the sidebar+content card, all 4 sides — a
+        M = 28  # margin around the sidebar+content card, all 4 sides — a
                 # real band of visible background, not a thin edge sliver
         bgcv = tk.Canvas(self.root, width=WIN_W, height=WIN_H,
                          highlightthickness=0, bg=ui.BG)
         bgcv.place(x=0, y=0)
         bgcv.configure(bg=ui.BG)   # flat black — matches the launcher/Hub theme now
-        self._snow = ui.Snowfall(bgcv, WIN_W, WIN_H, count=46)
+        self._snow = ui.Snowfall(bgcv, WIN_W, WIN_H, count=90)
         self._snow.start()
 
         # header

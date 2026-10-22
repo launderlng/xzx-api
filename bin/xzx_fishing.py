@@ -703,21 +703,21 @@ class FishingMacro(ui.Draggable):
 
     # ── layout ───────────────────────────────────────────────────────────────
     def _build(self):
-        M = 22  # margin around the sidebar+content card, all 4 sides — a
+        M = 28  # margin around the sidebar+content card, all 4 sides — a
                 # real band of visible background, not a thin edge sliver
         bgcv = tk.Canvas(self.root, width=WIN_W, height=WIN_H, highlightthickness=0, bg=ui.BG)
         bgcv.place(x=0, y=0)
-        self._snow = ui.Snowfall(bgcv, WIN_W, WIN_H, count=46)
+        self._snow = ui.Snowfall(bgcv, WIN_W, WIN_H, count=90)
         self._snow.start()
-        self.badge = ui.macro_header(self, WIN_W, "🎣", "FISHING MACRO", ui.CYAN)
-        tk.Frame(self.root, bg=ui.CYAN, height=2).place(x=0, y=ui.HEADER_H, width=WIN_W)
+        self.badge = ui.macro_header(self, WIN_W, "🎣", "FISHING MACRO", ui.ACCENT)
+        tk.Frame(self.root, bg=ui.ACCENT, height=2).place(x=0, y=ui.HEADER_H, width=WIN_W)
 
         TOP_Y = ui.HEADER_H + 2 + M
         sb = tk.Frame(self.root, bg=ui.PANEL2, highlightbackground=ui.BORDER, highlightthickness=1)
         sb.place(x=M, y=TOP_Y, width=ui.SIDEBAR_W, height=WIN_H-TOP_Y-M)
         self._stabs = []
         for i, (ico, name) in enumerate([("🎣", "Macro"), ("📊", "Stats"), ("⚙", "Settings")]):
-            btn = ui.SideIconBtn(sb, ico, name, active_color=ui.CYAN)
+            btn = ui.SideIconBtn(sb, ico, name, active_color=ui.ACCENT)
             btn.frame.pack(fill="x")
             btn.bind("<Button-1>", lambda e, idx=i: self._tab(idx))
             self._stabs.append(btn)
@@ -734,7 +734,7 @@ class FishingMacro(ui.Draggable):
     def _mk_macro_view(self, w, h):
         f = tk.Frame(self.cont, bg=ui.PANEL, width=w, height=h); f.pack_propagate(False)
         body = tk.Frame(f, bg=ui.PANEL); body.pack(fill="both", expand=True, padx=20, pady=14)
-        tk.Label(body, text="🎣", bg=ui.PANEL, fg=ui.CYAN, font=("Segoe UI Emoji", 32)).pack(pady=(4,2))
+        tk.Label(body, text="🎣", bg=ui.PANEL, fg=ui.ACCENT, font=("Segoe UI Emoji", 32)).pack(pady=(4,2))
         tk.Label(body, text="Fishing Auto-Macro", bg=ui.PANEL, fg=ui.FG, font=("Segoe UI Black", 14)).pack()
         tk.Label(body, text="Casts, reads the skill-check, and keeps the catch",
                  bg=ui.PANEL, fg=ui.MUTED, font=("Segoe UI", 9)).pack(pady=(2,10))
@@ -748,7 +748,7 @@ class FishingMacro(ui.Draggable):
         self._t_lost = ui.StatTile(tiles, "GOT AWAY", "0", accent=ui.RED)
         self._t_lost.frame.pack(side="left", expand=True, fill="both", padx=(4,0))
         tk.Frame(body, bg=ui.BORDER2, height=1).pack(fill="x", pady=(0,10))
-        self._toggle = ui.ToggleButton(body, self._on_toggle, start_bg=ui.CYAN,
+        self._toggle = ui.ToggleButton(body, self._on_toggle, start_bg=ui.ACCENT,
                                         start_label="▶  START FISHING", stop_label="■  STOP FISHING",
                                         stop_bg=ui.RED)
         self._toggle.btn.pack(fill="x", ipady=4); self._toggle.btn.configure(fg=ui.BG)

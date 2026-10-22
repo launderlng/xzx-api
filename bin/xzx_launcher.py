@@ -199,7 +199,7 @@ def key_still_valid(code: str) -> bool:
 # ── macros ──────────────────────────────────────────────────────────────────────
 MACROS = [
     {"id":"fishing",  "icon":"🎣", "name":"Fishing",
-     "color": ui.CYAN,   "file":"xzx_fishing.py",  "exe":"XZX Fishing.exe",
+     "color": ui.ACCENT, "file":"xzx_fishing.py",  "exe":"XZX Fishing.exe",
      "desc":"Auto-detects fish bite and casts/reels for you in FiveM.",
      "keys":["F5 Start","F6 Stop","F10 Close"]},
     {"id":"metal",    "icon":"🔍", "name":"Metal Detector",
@@ -207,7 +207,7 @@ MACROS = [
      "desc":"GDI pixel scan — auto skill-check on metal detector minigame.",
      "keys":["F7 Start","F8 Stop","F10 Close"]},
     {"id":"altclick", "icon":"🖱️", "name":"Alt Click",
-     "color": ui.GREEN,  "file":"xzx_altclick.py", "exe":"XZX AltClick.exe",
+     "color": ui.ACCENT, "file":"xzx_altclick.py", "exe":"XZX AltClick.exe",
      "desc":"Hold-Alt auto-click macro with configurable CPS.",
      "keys":["F9 Toggle","F10 Close"]},
 ]
@@ -821,7 +821,7 @@ class HubWindow(Draggable):
         bgcv = tk.Canvas(self.root, width=HUB_W, height=HUB_H,
                          highlightthickness=0, bg=ui.BG)
         bgcv.place(x=0, y=0)
-        self._snow = ui.Snowfall(bgcv, HUB_W, HUB_H, count=80)
+        self._snow = ui.Snowfall(bgcv, HUB_W, HUB_H, count=140)
         self._snow.start()
 
         # ── custom title bar ──────────────────────────────────────────────
@@ -1028,19 +1028,18 @@ class HubWindow(Draggable):
         body.pack(fill="both", expand=True, padx=24, pady=20)
 
         ui.section_label(body, "Appearance", bg=ui.PANEL)
-        row = tk.Frame(body, bg=ui.PANEL); row.pack(fill="x", pady=(8, 4))
-        tk.Label(row, text="Accent colour", bg=ui.PANEL, fg=ui.FG2,
-                 font=("Segoe UI", 9)).pack(side="left")
-        swatch = tk.Label(row, text="  ", bg=ui.ACCENT,
-                          highlightbackground=ui.BORDER, highlightthickness=1,
-                          cursor="hand2", padx=12, pady=4)
-        swatch.pack(side="right")
-        swatch.bind("<Button-1>", lambda e: self._pick_colour("ACCENT"))
-        reset_btn = ui.ghost_btn(row, "Reset", self._reset_theme)
-        reset_btn.pack(side="right", padx=(0, 10))
-        tk.Label(body, text="Click the swatch to pick a colour. Applies across"
-                             " the Hub and every macro window.",
-                 bg=ui.PANEL, fg=ui.BORDER, font=("Segoe UI", 7)).pack(anchor="w", pady=(2, 0))
+        tk.Label(body, text="Accent colour", bg=ui.PANEL, fg=ui.FG2,
+                 font=("Segoe UI", 9)).pack(anchor="w", pady=(8, 2))
+        PRESET_ACCENTS = ["#ffffff", "#4fd8ff", "#5b9cff", "#a855f7", "#ff5fd1",
+                          "#ff4d5e", "#ff8a3d", "#ffd166", "#3ddc74", "#2dd4bf"]
+        swatches = ui.swatch_grid(body, PRESET_ACCENTS, ui.ACCENT,
+                                  self._set_accent, bg=ui.PANEL)
+        swatches.pack(anchor="w")
+        reset_btn = ui.ghost_btn(body, "Reset to default", self._reset_theme)
+        reset_btn.pack(anchor="w", pady=(8, 0))
+        tk.Label(body, text="Pick a swatch. Applies across the Hub and every"
+                             " macro window.",
+                 bg=ui.PANEL, fg=ui.BORDER, font=("Segoe UI", 7)).pack(anchor="w", pady=(6, 0))
 
         tk.Frame(body, bg=ui.PANEL, height=18).pack()
         ui.section_label(body, "Hotkeys", bg=ui.PANEL)
@@ -1054,6 +1053,12 @@ class HubWindow(Draggable):
                              " Works even while a game has focus.",
                  bg=ui.PANEL, fg=ui.BORDER, font=("Segoe UI", 7)).pack(anchor="w", pady=(2, 0))
         return f
+
+    def _set_accent(self, hexv):
+        overrides = ui.load_theme_overrides()
+        overrides["ACCENT"] = hexv
+        ui.save_theme_overrides(overrides)
+        self._reload_theme_live()
 
     def _set_close_hotkey(self, keysym):
         self.close_key = keysym
