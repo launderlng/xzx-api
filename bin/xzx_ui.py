@@ -267,7 +267,12 @@ class Snowfall:
         self.cv, self.w, self.h = canvas, w, h
         self._running = False
         self._job = None
-        self._flakes = [self._new_flake(y=random.uniform(0, h)) for _ in range(count)]
+        # Every flake genuinely starts above the frame and falls down into
+        # it — staggered at different heights above the top edge so they
+        # don't all arrive in one visible wave, but none of them "already
+        # mid-fall" the instant a window opens (or reopens, e.g. switching
+        # into Settings after an accent change rebuilds the window).
+        self._flakes = [self._new_flake(y=random.uniform(-h, 0)) for _ in range(count)]
 
     def _new_flake(self, y=None):
         r = random.choice([1, 2, 2, 2, 3, 3, 4])
