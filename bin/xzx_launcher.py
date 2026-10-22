@@ -715,6 +715,12 @@ class HubWindow(Draggable):
         global SESSION_TOKEN
         SESSION_TOKEN = _make_session_token(self._discord_id, HWID)
 
+        # ── configurable "close the Hub" hotkey (default Escape) ──────────
+        hk = ui.load_hotkey_overrides()
+        self.close_key  = hk.get("close_hub", "Escape")
+        self._close_vk  = ui.vk_for_keysym(self.close_key) or ui.vk_for_keysym("Escape")
+        self._hub_watcher = ui.HotkeyWatcher()
+
         self.root    = tk.Tk()
         self.root.overrideredirect(True)
         self.root.geometry(f"{HUB_W}x{HUB_H}")
@@ -726,9 +732,19 @@ class HubWindow(Draggable):
         except Exception: pass
         self._build()
         self._fetch_key_lengths()
+        self._poll_close_hotkey()
 
         # heartbeat — checks server every 5 min; kills hub if revoked
         self._start_heartbeat()
+
+    def _poll_close_hotkey(self):
+        """Global poll (same GetAsyncKeyState mechanism the macros' F5-F10
+        use) for the user's chosen close-the-Hub key, so it works even
+        while the game has focus — not just while the Hub window does."""
+        if self._close_vk and self._hub_watcher.pressed(self._close_vk):
+            self._close()
+            return   # window is gone — don't reschedule
+        self.root.after(80, self._poll_close_hotkey)
 
     def _center(self):
         self.root.update_idletasks()
@@ -861,8 +877,13 @@ class HubWindow(Draggable):
             btn.frame.pack(fill="x")
             btn.bind("<Button-1>", lambda e, mid=m["id"]: self._show(mid))
             self._sbtns[m["id"]] = btn
-        # The Hub only ever opens macros now — no Theme tab sitting beside
-        # them as a second, unrelated section. One clean list, one job.
+        # The Hub opens macros, plus one Settings tab for accent colour and
+        # the close hotkey — no sprawling second section, just that.
+        tk.Frame(sb, bg=ui.BORDER, height=1).pack(fill="x", pady=(8,0))
+        settings_btn = ui.SideIconBtn(sb, "⚙", "Settings", active_color=ui.ACCENT)
+        settings_btn.frame.pack(fill="x")
+        settings_btn.bind("<Button-1>", lambda e: self._show("settings"))
+        self._sbtns["settings"] = settings_btn
 
         # bottom spacer so nothing sits inside the rounded bottom-left corner
         tk.Frame(sb, bg=ui.PANEL2, height=14).pack(fill="x", side="bottom")
@@ -903,6 +924,7 @@ class HubWindow(Draggable):
         self._panels = {}
         for m in self.owned_list:
             self._panels[m["id"]] = self._mk_panel(m, cw, ch)
+        self._panels["settings"] = self._mk_settings_panel(cw, ch)
         self._link_panel = self._mk_link_panel(cw, ch)
 
         if self.linked:
@@ -983,6 +1005,62 @@ class HubWindow(Draggable):
         tk.Label(body, text="Opens your browser to authorise. Come back when done.",
                  bg=ui.PANEL, fg=ui.BORDER, font=("Segoe UI", 7)).pack(pady=(10,0))
         return f
+
+    # ── settings panel (accent colour + close hotkey) ─────────────────────────────
+    def _mk_settings_panel(self, w, h):
+        f = tk.Frame(self.cont, bg=ui.PANEL, width=w, height=h)
+        f.pack_propagate(False)
+        tk.Frame(f, bg=ui.ACCENT, height=3).pack(fill="x")
+
+        hdr = tk.Frame(f, bg=ui.PANEL2, height=52)
+        hdr.pack(fill="x"); hdr.pack_propagate(False)
+        tk.Label(hdr, text="⚙", bg=ui.PANEL2, fg=ui.ACCENT,
+                 font=("Segoe UI Emoji", 20)).place(x=18, rely=0.5, anchor="w")
+        info = tk.Frame(hdr, bg=ui.PANEL2)
+        info.place(x=56, rely=0.5, anchor="w")
+        tk.Label(info, text="SETTINGS", bg=ui.PANEL2, fg=ui.FG,
+                 font=("Segoe UI Black", 13)).pack(anchor="w")
+        tk.Label(info, text="Accent colour and the Hub's close hotkey",
+                 bg=ui.PANEL2, fg=ui.MUTED, font=("Segoe UI", 8)).pack(anchor="w")
+        tk.Frame(f, bg=ui.BORDER2, height=1).pack(fill="x")
+
+        body = tk.Frame(f, bg=ui.PANEL)
+        body.pack(fill="both", expand=True, padx=24, pady=20)
+
+        ui.section_label(body, "Appearance", bg=ui.PANEL)
+        row = tk.Frame(body, bg=ui.PANEL); row.pack(fill="x", pady=(8, 4))
+        tk.Label(row, text="Accent colour", bg=ui.PANEL, fg=ui.FG2,
+                 font=("Segoe UI", 9)).pack(side="left")
+        swatch = tk.Label(row, text="  ", bg=ui.ACCENT,
+                          highlightbackground=ui.BORDER, highlightthickness=1,
+                          cursor="hand2", padx=12, pady=4)
+        swatch.pack(side="right")
+        swatch.bind("<Button-1>", lambda e: self._pick_colour("ACCENT"))
+        reset_btn = ui.ghost_btn(row, "Reset", self._reset_theme)
+        reset_btn.pack(side="right", padx=(0, 10))
+        tk.Label(body, text="Click the swatch to pick a colour. Applies across"
+                             " the Hub and every macro window.",
+                 bg=ui.PANEL, fg=ui.BORDER, font=("Segoe UI", 7)).pack(anchor="w", pady=(2, 0))
+
+        tk.Frame(body, bg=ui.PANEL, height=18).pack()
+        ui.section_label(body, "Hotkeys", bg=ui.PANEL)
+        row2 = tk.Frame(body, bg=ui.PANEL); row2.pack(fill="x", pady=(8, 4))
+        tk.Label(row2, text="Close the Hub", bg=ui.PANEL, fg=ui.FG2,
+                 font=("Segoe UI", 9)).pack(side="left")
+        self._close_key_cap = ui.KeyCapture(row2, self.root, self.close_key,
+                                            self._set_close_hotkey, bg=ui.PANEL)
+        self._close_key_cap.pack(side="right")
+        tk.Label(body, text="Click the key field, then press any key to rebind it."
+                             " Works even while a game has focus.",
+                 bg=ui.PANEL, fg=ui.BORDER, font=("Segoe UI", 7)).pack(anchor="w", pady=(2, 0))
+        return f
+
+    def _set_close_hotkey(self, keysym):
+        self.close_key = keysym
+        self._close_vk = ui.vk_for_keysym(keysym) or ui.vk_for_keysym("Escape")
+        overrides = ui.load_hotkey_overrides()
+        overrides["close_hub"] = keysym
+        ui.save_hotkey_overrides(overrides)
 
     # ── theme panel (full-palette customisation) ─────────────────────────────────
     _THEME_GROUPS = [

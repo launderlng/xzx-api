@@ -236,6 +236,82 @@ class HotkeyWatcher:
         return fired
 
 
+# ── user-rebindable hotkeys (e.g. the Hub's "close" key) ───────────────────────
+# Tk's own keysym (what a <Key> binding reports when the user presses a key
+# while a window is focused) mapped to the Win32 virtual-key code the global
+# poller above actually needs — captured once at bind time via a local <Key>
+# event, then watched afterwards the same way F5-F10 are.
+KEYSYM_TO_VK = {
+    "Escape": 0x1B, "Tab": 0x09, "space": 0x20, "Return": 0x0D,
+    "F1": 0x70, "F2": 0x71, "F3": 0x72, "F4": 0x73, "F5": 0x74, "F6": 0x75,
+    "F7": 0x76, "F8": 0x77, "F9": 0x78, "F10": 0x79, "F11": 0x7A, "F12": 0x7B,
+    "Delete": 0x2E, "Insert": 0x2D, "Home": 0x24, "End": 0x23,
+    "Prior": 0x21, "Next": 0x22,  # Page Up / Page Down
+    "Up": 0x26, "Down": 0x28, "Left": 0x25, "Right": 0x27,
+    "Caps_Lock": 0x14,
+}
+for _c in "0123456789":
+    KEYSYM_TO_VK[_c] = ord(_c)
+for _c in "abcdefghijklmnopqrstuvwxyz":
+    KEYSYM_TO_VK[_c] = ord(_c.upper())
+del _c
+
+def vk_for_keysym(keysym: str):
+    return KEYSYM_TO_VK.get(keysym)
+
+
+class KeyCapture:
+    """A small clickable keycap showing the current rebindable key; click
+    it, then press any key to rebind. Capture itself uses a local Tk <Key>
+    binding (the window already has focus — you're clicking inside it),
+    not the global poller; the keysym it captures is what gets watched
+    globally afterwards via vk_for_keysym() + HotkeyWatcher."""
+    def __init__(self, parent, root, key_name, on_change, bg=None):
+        self.root = root
+        self.on_change = on_change
+        self.key_name = key_name
+        pbg = bg if bg is not None else parent["bg"]
+        self._bg = pbg
+        self.cv = tk.Canvas(parent, width=108, height=30, bg=pbg,
+                            highlightthickness=0, cursor="hand2")
+        self._listening = False
+        self._bind_id = None
+        self._draw()
+        self.cv.bind("<Button-1>", self._start_listen)
+
+    def _draw(self):
+        self.cv.delete("all")
+        label = "Press a key…" if self._listening else self.key_name
+        txt_colour = ACCENT if self._listening else FG2
+        fill = PANEL3 if self._listening else PANEL2
+        outline = ACCENT if self._listening else BORDER
+        round_rect(self.cv, 1, 1, 107, 29, r=8, fill=fill, outline=outline, width=1)
+        self.cv.create_text(54, 15, text=label, fill=txt_colour,
+                            font=("Consolas", 8, "bold"))
+
+    def _start_listen(self, _e=None):
+        if self._listening:
+            return
+        self._listening = True
+        self._draw()
+        self._bind_id = self.root.bind("<Key>", self._on_key, add="+")
+
+    def _on_key(self, event):
+        if not self._listening:
+            return
+        if self._bind_id:
+            self.root.unbind("<Key>", self._bind_id)
+            self._bind_id = None
+        self._listening = False
+        self.key_name = event.keysym
+        self._draw()
+        self.on_change(event.keysym)
+
+    def pack(self, **kw):  self.cv.pack(**kw)
+    def place(self, **kw): self.cv.place(**kw)
+    def grid(self, **kw):  self.cv.grid(**kw)
+
+
 # ── theme persistence (full-palette customisation, shared across the Hub
 # and every macro window, each running as its own separate process) ───────────
 import json as _json
@@ -250,7 +326,23 @@ def suite_dir():
         return _Path(sys.executable).parent
     return _Path(__file__).parent
 
-THEME_PATH = suite_dir() / "xzx_theme.json"
+THEME_PATH   = suite_dir() / "xzx_theme.json"
+HOTKEY_PATH  = suite_dir() / "xzx_hotkeys.json"
+
+def load_hotkey_overrides():
+    """Saved rebindable-hotkey overrides (keysym strings) from disk."""
+    try:
+        data = _json.loads(HOTKEY_PATH.read_text())
+        return {k: v for k, v in data.items() if isinstance(v, str)}
+    except Exception:
+        return {}
+
+def save_hotkey_overrides(values: dict) -> bool:
+    try:
+        HOTKEY_PATH.write_text(_json.dumps(values, indent=2))
+        return True
+    except Exception:
+        return False
 
 _PALETTE_KEYS = ["BG","GRAD1","GRAD2","GRAD3","PANEL","PANEL2","PANEL3",
                  "ACCENT","ACCENT2","ACCENT3","FG","FG2","MUTED",
