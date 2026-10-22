@@ -3,6 +3,128 @@ XZX shared UI — v7  (mono theme: true black/white, one layer, no colour noise)
 """
 import tkinter as tk
 import os, sys, random, math, time as _time
+import base64, io
+
+# ── brand logo (embedded, not a loose asset file) ───────────────────────────
+# Kept as base64 right in the source instead of a separate .png next to the
+# scripts, because the --onefile PyInstaller build in BUILD.bat doesn't bundle
+# any extra data files — an external asset path would just be missing once
+# this is frozen into an exe. Embedding it here means it always ships with
+# the code, dev or frozen, with zero build-script changes needed.
+_XZX_LOGO_PNG_B64 = (
+    "iVBORw0KGgoAAAANSUhEUgAAATwAAADyCAYAAADQkHl2AAAWg0lEQVR42u2dT2hV19rGnyWdBAcSEgKiEggEySjo6Ehm"
+    "GV34MBAIRSi0OHGQkeKFcls6KreloNiRAyfSQqGfCELKB3eUUUPPyOJIbEAIRoRcgziwGe5vsN8dt8fzZ+9z9r+19u8H"
+    "l6Sp9ebstd5nPe9637W2E3hDFEWn7NslSaclzUs6az/71jn3lqdUynNfkLRp/7gvaU/SE0mHPHO/+IRH0HiBS4vbJUln"
+    "JM2Z0E3ZHz2StCPpEU+tFNZM8JLn/VrSG0kHURS9lPQHIugHjkfQKHGbMTHrDBG3QexI+h+CrRR397OklRF/9Mjc34Gk"
+    "rn3ftX9GBBE8BM4EbtmC6ZykC5KmJc2O8VceSfrKOfcjT7fQcbou6c6Y/3niBP/EBSJ4CFwscFncW1Z2JH3unHvOEy/M"
+    "3f1H0mJBf2XiAhFABC/YgEmnqEULHC6vue5uHAfYlXTAgoXg+eTikiLDignd+TFTVFxeWO4uqwA+M+Hbwf0heE0Wuapc"
+    "XBZu4PIa7+7ypr9dSU8RPwSvrtV/uUYXh8sLz93lcX8PET8Er+0i1+sO2Mvz193lTX23ET8Er6h0ddUTkcPlFbewZem7"
+    "w/kheMGI3JKkDQ9FDpdXjLv7TvXuwU4qfg/Fnh+Cl0HkksLDqqci18/lcfoiXHc3Svy2FRc8tnD6CF56X+6K4urqYmAf"
+    "8UjSZ845zthmmw/rkn7x1N0NmwP7krbEfl/7BK9PynoxsAneywNJ14qa5KkbW6T45IgUN1enOd3nP51XfLJgvufne6l/"
+    "18ur1PcHqe8PjydwsZ/rnqRPA54LR5IetznlbY3g9bi5UFLWrKnNtWEuLyViaQE7nRKq5Aqqc/b1TB+hm059f7Kg3/1d"
+    "6vs3fYTvpX19YS5GKeF8ZX/2MIswmru716J5sau4x+/XNrm+4AUviqKOObmNFri5oS4vJWqJoCVidq5HxKZTouXb8zpK"
+    "ieWblEC+TAnjXq8gtsDdZXF9we/1BSl4Pe0kawpvb24cl/esj6BNtfR5HPURRF+r8UW7vi0F3N4SlOC1OG0FKHqB3A4x"
+    "3Q1C8Ezo1lqetgKQ7oYueNYouqn6D+wDhC58t31vcfL6nRZWkNgUe3QAZTKleD98LoqiV865rq8f5ITnaewNxA6gMhYl"
+    "3ejpxUTwKmJN0mXmIEClrEq6iuDVk8qyZwdQLbOSNi0GEbwKxO4UqSxA7antho+prY8O7yqpLEDtbFp6i+CRygIEz5Sk"
+    "m1Y8RPBIZQGCZ0Xxfp43qa1PDm/VRwsNEDhf+BSXXgie2eab4mwsQNOY9Sm19cXhbSqMa7cBQuSi4r5YBK8Ad9fx5WEC"
+    "tJQpedKb12jBo1AB4A1eHDtrusNbFT13AL7Q+MJiYwUvVaig5w7ADxpfwGiyw6NQAeAfyWsVELwc7o5CBYC/NLaA0TjB"
+    "o1AB4D2NvVygiQ6PExUA/tPIExiNEjxOVAAEw6ykK01zeU1zeGuKu7YBwH8uq2G3IzdG8MzdbYg2FIBQmFK8l9eYNpUm"
+    "OTzaUADC46LFNoKXcne0oQCE6/LWmtKmUrvg2abmhmhDAQiVRYtxBE/SkuISNgCEyxdNcHm1Cl6qyZg2FICwmVUDblOp"
+    "2+HRZAzQHmqP99oEz5T+Cu4OoFUur9Zm5DodHu4OAJcXvuDh7gBweW1yeNxkDNBeLtfl8ioXvJS74wgZQDuZUnwzcuUu"
+    "rw6Hh7sDgPN1uLxKBQ93BwDGbB0ur2qHh7sDgNpcXmWCh7sDgD4ur9KKbZUOj747AOil0optJYJH3x0ADGCqSpdXlcPD"
+    "3QFA7fpQuuDh7gBgBJXt5VXh8JZwdwCQweUteS14qduMcXcAMMrllX4rctkOb0m8qwIAslH6uy/KFjzeVQEAWTlbtssr"
+    "TfDsXZQdxhAAMjIlqVPme2zLdHhrit9JCQCQlYsqcRusFMFLFSs4RgYAeV3eRlktKmU5vFXcHQCMSWmXChQueFwSAAAT"
+    "UlojchkOj0ZjAJiUCyqhEbkMwaPRGAAmZVEltKgUKni0ogBAgRTeolK0w6MVBQCK4qKk5UYKnm0wXhLFCgAohsLvyivS"
+    "4VGsAICiKfQWlSIFj2IFABRNobeoFCJ4FCsAoEQKK14U5fCWRbECAMqhsOLFxILHyQoAKJnCihdFOLwlxV3RAABlUcjJ"
+    "iyIEryMu+QSAcllUAXWCiQQvdQ0UAEDZXJo0rZ3U4S0pvsoFAKBsJu7Jm1Tw6L0DgKqYuCdvbMGj9w4AaqAzSVo7icNb"
+    "Jp0FgIqZ6DbkSQRvhXQWAGpIa1cqFTzSWQCoOa0d66jZuA6Po2QAUGdaO9ZRs3EFb0UcJQMAz9La3IJHOgsADUlrc1dr"
+    "x3F4VGcBoAlpbe5q7TiCR3UWALxMa3MJnllI0lkA8DKtzevwODsLAE1Ka3Odrc0reB3SWQBoUFqbK+PMLHip1zACADSF"
+    "XFdG5XF43GwMAE3jgqSZrH/4k5zp7Fmeb2UcSXpn37+xr9P29aRo/GZ8QKZJy5KeFyZ4ZhnPMoilBs++pANJXft+T9Ir"
+    "+/cHkubs+9P2dUXSOVvhGJvqxuhPSS8k7djPB43RvI1Lx37OGJXDlMXCoyId3oxoRymD15K2Jf1hQvfUOfd2wJ/tXcEe"
+    "2UI0YyvciqQ1AqsUkdsygXsi6TDHGCVmYcni55LiZlkKf8XSiaLo1JBxOcZldHjrku4xUIUK3U+SHo4QucykxG9N8a2w"
+    "FxG+idix8dlyzj0v4i9Mid+GjRMvvyouni4757pFCd51SXd4roU5ujtZBmeCwFqwgNokqHKzK+lukUI3RPhu4PgK44Zz"
+    "7seJBc8G556kT3mmEwfSl5K2i3B0GQOrY0F1GbeXKX39rezFqE9srUq6qQkutQRJ0gNJ10bFVhbBW5D0H5zCxIH0r7Ic"
+    "Q4aguirpa5zEUOf9b0n3q1qM+sTY9yxMExuKf4yKsSx9eMuiHWUSsbtrK8/zOn4B59xbs/rXbFLAx4FyzTn3Yx1iZ2P0"
+    "3Mbnrokv5GdaGS4FzSJ4XPY5vmv4StK3dQVST1A9kvS53rdTQCx2n9uzqXt83kr61pwmopefWcWtQOMLnqVD53iWYzm7"
+    "2lKkIUHVlfRPRO8Dses2aHwSN47ojcfIY2ajHN6MOE42bhrbKLHrI3ptTm93JX3ZJLHr4b6J3hHhlIuRx8xGCR77d/n5"
+    "rSlp7AjR+7KlLuK1pLtNSGNHpLf3beGE7IzcxxsleOzf5WNHcTX2rQe/63ZLXcRPJiaNxubQXbYfcjFyH2+g4LF/N5Zz"
+    "uF1XNXbMgNoyR9qmBemuJwtSUr1t+/ZDXobu4w1zeOzf5XQOTU6ThgTUnZYElFcLUs/2w12xn5eVMxqyjzdM8Jb1/rob"
+    "yOAcfPzFLaC2WpLKbnv6u29JekyYZeK83t9ak0vw5kVnfhaOJD30zTn0EPpe0a6N0Vsff3mbW7dxeZk4qSE3Ow0TPK5z"
+    "z8Zj3x2SBdTDgMdoq8EtKFnZxuVlYkpDOkv6Cp5t+p3h2bXC3aXTphD38nZDEHNzp7i8bAx8feMgh7c0LA+GY/YVyP6X"
+    "iXaIe3khuLuEJ7i8TMxpQOFikOCdFg3HWYPpeUCf56HCakZ+rYD2Jm2udQm7kQxsQB4kePOi4ThLOhvaRv9TSc8C+jzP"
+    "5G9lti2LUhkMbEAeJHgULEbz2FKMYLB9opCKF11fK7MtWpTK4mwmwaNgkSuYngf4ufYCcRAhOvBkUSKtHU3fwkU/h0fB"
+    "Ilsw7Qf62Z7o/XtWfWY/NAeeYkdUa0fRt3DRT/AoWIzmXcCr7KHid6/6zp/2WULkld6/BBz6M93PuPUTPAoWo3mj+MXL"
+    "wWEp04sAPsqLAPfvEg7EPt4o+p646Cd4uLt2u4ckHTwK4DOEyqGkl4ThUPqeuPhA8LgSKrcTCpU9z3//owA+QxtceNmc"
+    "6y1c9Dq8GVGhzZQuBf75fN8jemefAdrNmVEp7Zzi61WgvekSMAdD4aNKba/gnVa82QfD06XQOZDfrSnBFpUgF2fVU6nt"
+    "FTwqtAAQEp1hgkeFFiQazyEMPqrUHgseFdpcDxEA/ODcMIdHhRYSpj3/3XGpcCTpTLo1JS14M0ySzISe+lO8Yg6Gko19"
+    "UKlNC96ceEvZWDYZGsdJE+0gYfspN3P9BI9VPTtnhr3sNwB8r9ZPacQb6EOYg4RhJqbTi9+JgCZ51SvGTMDuIYR0KeSU"
+    "j+2nfG5f/QSPPYF8q0bIE64TwmcI2IUvi+2nsdx+WvDYE8jObCCi0I9QLoAN1oVbAM8Shvnd/olUGgP5uBTocwvlAtiz"
+    "GvDmqgC2HHjnTD6Ob01JOzw2QfNxITQHYZNiRWHs5U7ZZwmNGZt7kJ0zvSktm6A4iGQehJSqr0VRtBDYGC2L/fZx5/ax"
+    "4NGDN56DuBJYWrss6SKLUqMd+BXRTZGXvn14MF5au0QwsShVxBLp7Fgcd1UkgkfT8XgsStoIKJhWAxyj1VAWJZtri4Rd"
+    "bo5P3iSCN88zGZtQ9ok2FGarw6ykDd9dns2xNcJtMk702H/Iz1lJm54HUyfwYPoiAJe3hrsbm+Pm4xOpoIXxH+aaiYaP"
+    "YndK0o3Ag2lW0g1fXZ7NrU1CbWJjcix4nLKYjEWPA2pVYe7d9XLZx8/ZkgWpupSWUxaFBtRVz4JpQdJNteOY0pSkHzx0"
+    "4m1ZkMrmXNrhccqimIDa9CWgbKH7XmGeRgjCidtc+kGcmy1sztOHV3xA3fKkanvVXGkbnfg3TRc9m0OkssVxJnF4MzyL"
+    "Qrko6fsmB1QUReuSvlY7K/NTiqu2Vxs8PqcUFyk+JZyKJX20DIoLqMa6CBO7tqdJs5K+tmfRRLH7RlRli2ZO0swJxK40"
+    "0btporfQoGBKxI40KRa9e1EUXW+o2NEXWwKf2FcuDiiHm4rv4vqXc+55zYF01dJYNsA/dnqSdN8597bGMVpQXES6jNiV"
+    "5/IoWpTPp5J+rit9skD6BrEbKnrf1enGrRr7s80VxK4cphOHx8UB5bMiaS6KonlJW1W4PXN1q+YyVxiCTFsQnSiKbkva"
+    "rsLtpZz3JtsM1aa0UD6L5iQ2yg4qcwwbiquRuLp8C9N5ST9FUfTQOdcteTG6QgpbKacRvOqdRBJU21EU/SrpSRGOz4Jo"
+    "yYSOg+aTpbg3FZ+P3pL0UNLTIhanHqFbZTGqlJOS5Gxv6RdWmVo4kvRYUlfSjqQnkg6zBldK5DqKX+xCEBXPa0nbkv6w"
+    "cXqac3yS1yds2DhdJNZqi7XPnJXlv2MQGhFYzyS9lPRC0r6kPUmv0pbcvs4rvv2hY27xJONXScC8szHqpsZHfcYoGZ9z"
+    "ijv8z7MQNUPwPkmlWlB/KjXbM0CyIPvAljNetW1HTNkYrTBGXo4fRYumDxCBwxhBYQ5vnj48AGgNCB4AtMaNI3gAgMMD"
+    "AEDwAAA8FjzeWAYArRG8fR4DAODwAABweAAAfgoeAACCBwCA4AEAIHgAAI3kCMEDABweAEBgTEnaO6H41tYjngcAkNIC"
+    "AJDSAgAgeAAATeMdggcAbeLVCcWvmHvHswAAUloAgMAE7w2PAgAC5o2kgxOSDngWANAmh4foAUDIHEg6PCHpkGcBAG1y"
+    "eAAAIfMyLXgveR4AELzDc8695THk5kjSrrh0AarnNXNvLF44594mDu8FzyPXhPtK0j8kfSbpgf0MoOx590DSNZt7XzHv"
+    "8vMJjyAXu5K+dM49sn9+HkXRtqRVSSuS1iQt8pigYKH7SdKOpO0kI4ui6L7iq91+YM5lYj8teLyqcTQPJN1xznXTP7QJ"
+    "+MiE76GkDUkdSRcVXzoIkJcjSY8ldW1OPe3dekrNu1eSbtmCC4Of5wcOL7kElAAdvMLedc49H/SHbAJ2JXWjKFqQtCzp"
+    "irm/WR4jZJxr25L+kLQ1bL6l5l03iqLPJW3a/4jh/uyR0mabgP+WdD9PcccmapLuLuH6YIT72Je0NcjNZZlvURR9a3/P"
+    "d8yxj3in+JKUY8F7Iuk3SZd5WB9wUtKlxLnl/Y+HuL4LYt+FxTSnmxvBks1V+HhB2ZadJnPJT6MoOiXpqqSvScE+YtdW"
+    "4LuTTkx7zkvm+C6R8rZO5J6Zk+uO4+b6zKcFS2UpmGXI0FyfB7gu6abYBO3Hjk3W+0X0L/aI34ak84hfsCLXHTdlHSJ0"
+    "azZviNX+sXo71VGhvoLXs2qwCdrfIj+WdFupNgHEDwaI3I6kJwWkrOl5smqmhD3h/s9+YJHRjXiwV030sMr9he83Sb8W"
+    "KXwD0t4Lks4yuRs9F96V4eT6CN0Vsdc+iF1JXw6LR5fhQXck3eAhD11RtssQvh7xO22pSwf31xiR25f0p+LCQyF7ciOE"
+    "jv3e4ebjoz7Z3IKH22uG8PVsN8zh/moVuBdJqirpsIyxRuhyubq7yriv7nIOAm6vIcKXCooZxe0u8ykBnCZA/BI4hK48"
+    "Vze24KUcxhpuL5PwJS0IW0VtWmcUwMQBnrWvc7jAkcGT7MG9tBR1rwqB6xNXG6IYUairm0jwcHtjBdPjKoVvhAtMi+C0"
+    "4ubqqRaNhcy5HZi4Je7tlf3ssMor0yyOOghdea6uEMFLBRN7e/lWprGPEJXkBE+n0uEzPUIoTwMwcWxveoRtP+3cpOPT"
+    "MHU8f27YqcjVFSZ4uL2J0t0ijxWVJYRKucJzJohKiaJSwli2OCbuLHlpfPJq0bSgKSVqx46tLmEbkrZywqZCV1e44PW4"
+    "PTq/8w3m8cHxIga0AkFUShTVI4wycUw4N+b/VfpC2uTqsj37+ioldGqSoI0wBBsmduylZmdHBTf4uxIGNzml8QUrWC7H"
+    "d633GEwIRFF0yjn3NiWWgydjoK8biKLourjFJG88jLySrRGClxrkddEVnpUHJni8XyRMwVuQ9DOZT+b0tbSWLlfyQFPU"
+    "yDbIn4Xo7gCXl4NCihK1Ch5pLu4OPlj8/w+XV136WpvgpQZ8SVRzewf7Gu6uNaK3LukX5v4H6eudKot1roZB53ob3F2b"
+    "Xd49SZ+2XOgKv16tsYLXk+a2+YjarqTPm96KAqW4vHtq59ZOsk9XW++pa8AEaOsV1bedc/9EAnB5LRG6Ql6R4L3gpSZC"
+    "0pzZhsLGrqR/NOWEBdQy139uwQKfFCQa01TvGjYR0oWNUI/eHEn6yjn3I6HfatG7pXgfO1Sh25Z0RzWeGW+84PUIX6h3"
+    "gu0o3rvD3bVb8EJsRq7sLsigBC9g4aMNBdLz+7rCaEZuvNB5IXgBCh9tKNA7r30uYHgjdF4JXiDCRxsK9JvTHcUNuD7N"
+    "Ze+EzkvB6xG+Jb2/cqfp1S4KFTBsLn8jPwoYjbjAtnWC56HwUaiAYfO4yQWMD+5s9FXoghC8PpOmiS9BoVABWeZv005g"
+    "1PouFsghfFEUrUdR9L9RFP03qp9bjApkyVZsztbNf+33WDcTERQu5Amk+l+UQioLeeZsnScwkv25HXlWiICPV85OFEXX"
+    "oyj6PYqivytcKdcZAcg5X69XOEf/tpi4bmILAae7f5WdymZ5jwNADantX6m0tVVz1LV1Uimu7iYXFpxXsZvFpLLQtNT2"
+    "taRniosQXXlebYXJVtR1c2R/FZBOkMpCU1Lbv21O32qjm4P8Ke/fY0wwUlmoM7X9uydlXeBpQpbJlhQ68rS3/M4Eg4IX"
+    "4N9ztpNct7nLogulit9fVLqghPm3PmTOIXJQqfj9lUojrvOEoKQ5d6tPuorIjYHjEYw/EfW+0iuV/AJhaP1c+0bxmVYq"
+    "rBPw/w6FRSyDpymlAAAAAElFTkSuQmCC"
+)
+_LOGO_CACHE: dict = {}
+
+
+def logo_image(size: int = 48):
+    """Decodes the embedded XZX logo PNG and returns a cached, alpha-composited
+    ImageTk.PhotoImage scaled to `size` px tall (aspect-preserved). Composited
+    against pure black so the image's own transparency reads correctly on a
+    Tkinter Canvas, which has no real alpha blending of its own. Returns None
+    (caller should fall back to the text wordmark) if Pillow can't load it —
+    Pillow is already a BUILD.bat dependency, so this is just a safety net."""
+    if size in _LOGO_CACHE:
+        return _LOGO_CACHE[size]
+    try:
+        from PIL import Image, ImageTk
+        raw = base64.b64decode(_XZX_LOGO_PNG_B64)
+        im = Image.open(io.BytesIO(raw)).convert("RGBA")
+        w, h = im.size
+        new_h = size
+        new_w = max(1, round(w * (new_h / h)))
+        im = im.resize((new_w, new_h), Image.LANCZOS)
+        bg = Image.new("RGBA", im.size, (0, 0, 0, 255))
+        bg.alpha_composite(im)
+        photo = ImageTk.PhotoImage(bg.convert("RGB"))
+        _LOGO_CACHE[size] = photo
+        return photo
+    except Exception:
+        return None
 
 # ── palette ───────────────────────────────────────────────────────────────────
 # Back to flat black and white — no navy, no cyan, no gradient-as-decoration.
@@ -1068,15 +1190,17 @@ def collapsible(parent, title, bg=PANEL, start_open=False):
     return wrap, body
 
 
-def macro_header(owner, w: int, icon: str, title: str, accent: str):
+def macro_header(owner, w: int, icon: str, title: str, accent: str, top: int = 0):
     """Shared header for a frameless macro window: icon + title (both
     draggable), a StatusBadge, and minimize/close controls — the exact
     chrome the Hub uses, so a macro window looks and behaves like a child
     of the Hub instead of a different app. `owner` must mix in Draggable
     and expose `.root`; returns the StatusBadge for the caller to drive.
+    `top` insets the header from the window's top edge by that many
+    pixels, so the snowfall is visible above it too, not just below.
     """
     hdr = tk.Frame(owner.root, bg=PANEL2, highlightthickness=0)
-    hdr.place(x=0, y=0, width=w, height=HEADER_H)
+    hdr.place(x=0, y=top, width=w, height=HEADER_H)
     owner._make_draggable(hdr)
 
     ico = tk.Label(hdr, text=icon, bg=PANEL2, fg=accent, font=("Segoe UI Emoji", 16))

@@ -286,10 +286,10 @@ class LoginWindow(Draggable):
         wrap.place(relx=0.5, rely=0.55, anchor="center")
 
         # ── logo with soft glow ─────────────────────────────────────────────
-        lc = tk.Canvas(wrap, width=110, height=110,
+        lc = tk.Canvas(wrap, width=150, height=150,
                        bg=ui.BG, highlightthickness=0)
-        lc.pack(pady=(0, 10))
-        self.root.after(20, lambda: self._draw_logo(lc, 110, 110))
+        lc.pack(pady=(0, 6))
+        self.root.after(20, lambda: self._draw_logo(lc, 150, 150))
 
         # product name
         tk.Label(wrap, text="XZX LAUNCHER", bg=ui.BG, fg=ui.FG,
@@ -335,7 +335,7 @@ class LoginWindow(Draggable):
         self.btn = ui.RoundButton(inn, "Login with Discord",
                                   self._start_oauth,
                                   w=BTN_W, h=44, r=12,
-                                  bg="#5865F2", hover="#4752c4",
+                                  bg="#ffffff", hover="#dcdcdc",
                                   font=("Segoe UI Black", 11),
                                   parent_bg=ui.PANEL)
         self.btn.pack()
@@ -384,7 +384,7 @@ class LoginWindow(Draggable):
         # halo — removed rather than re-guessed at blind.)
         cx, cy = w // 2, h // 2
         cv.create_text(cx, cy, text="XZX", fill=ui.FG,
-                       font=("Segoe UI Black", 24))
+                       font=("Segoe UI Black", 38))
 
     def _paint_bg(self):
         # one flat layer: pure black, nothing drawn under or behind it —
@@ -709,7 +709,7 @@ class HubWindow(Draggable):
         # ── custom title bar ──────────────────────────────────────────────
         bar = tk.Frame(self.root, bg=ui.PANEL2, highlightthickness=0,
                        height=34)
-        bar.place(x=0, y=0, width=HUB_W, height=34)
+        bar.place(x=0, y=M, width=HUB_W, height=34)
         self._make_draggable(bar)
 
         lc = tk.Canvas(bar, width=110, height=28, bg=ui.PANEL2,
@@ -738,8 +738,8 @@ class HubWindow(Draggable):
                  font=("Segoe UI Semibold", 8)).pack(side="right", padx=(0,4))
 
         # ── sidebar ───────────────────────────────────────────────────────
-        SB_Y = 34 + M   # gap below the title bar too, so snow shows above
-                        # the card as well as around its other 3 sides
+        SB_Y = M + 34 + M   # gap above AND below the title bar, so snow
+                            # shows at the very top of the window too
         sb = tk.Frame(self.root, bg=ui.PANEL2, highlightthickness=0)
         sb.place(x=M, y=SB_Y, width=ui.SIDEBAR_W, height=HUB_H-SB_Y-M)
         sb.pack_propagate(False)
@@ -819,8 +819,14 @@ class HubWindow(Draggable):
 
     def _draw_logo_sidebar(self, cv):
         cx, cy = ui.SIDEBAR_W//2, 30
-        cv.create_text(cx, cy, text="XZX", fill=ui.FG,
-                       font=("Segoe UI Black", 10))
+        img = ui.logo_image(size=34)
+        if img is not None:
+            self._sidebar_logo_img = img  # keep a reference — Tk drops the
+                                           # image if nothing holds onto it
+            cv.create_image(cx, cy, image=img)
+        else:
+            cv.create_text(cx, cy, text="XZX", fill=ui.FG,
+                           font=("Segoe UI Black", 10))
 
     # ── Discord link panel ─────────────────────────────────────────────────────
     def _mk_link_panel(self, w, h):

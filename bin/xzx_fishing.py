@@ -713,9 +713,9 @@ class FishingMacro(ui.Draggable):
         self._make_draggable(bgcv)  # drag from anywhere on the background
         self._snow = ui.Snowfall(bgcv, WIN_W, WIN_H, count=170)
         self._snow.start()
-        self.badge = ui.macro_header(self, WIN_W, "🎣", "FISHING MACRO", ui.ACCENT)
+        self.badge = ui.macro_header(self, WIN_W, "🎣", "FISHING MACRO", ui.ACCENT, top=M)
 
-        TOP_Y = ui.HEADER_H + 2 + M
+        TOP_Y = M + ui.HEADER_H + 2 + M
         sb = tk.Frame(self.root, bg=ui.PANEL2, highlightthickness=0)
         sb.place(x=M, y=TOP_Y, width=ui.SIDEBAR_W, height=WIN_H-TOP_Y-M)
         self._stabs = []

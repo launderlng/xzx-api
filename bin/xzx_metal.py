@@ -160,10 +160,10 @@ class MetalMacro(ui.Draggable):
         self._snow.start()
 
         # header
-        self.badge = ui.macro_header(self, WIN_W, "🔍", "METAL DETECTOR", ui.ACCENT)
+        self.badge = ui.macro_header(self, WIN_W, "🔍", "METAL DETECTOR", ui.ACCENT, top=M)
 
         # sidebar
-        TOP_Y = ui.HEADER_H + 2 + M
+        TOP_Y = M + ui.HEADER_H + 2 + M
         sb = tk.Frame(self.root, bg=ui.PANEL2,
                       highlightthickness=0)
         sb.place(x=M, y=TOP_Y,
