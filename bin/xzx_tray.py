@@ -320,11 +320,14 @@ def _run_tray():
         import pystray
         from PIL import Image, ImageDraw
 
-        # simple black/white XZX icon — matches the launcher's mono theme
+        # simple navy/cyan XZX icon — matches the launcher's glass theme.
+        # Hardcoded here (not imported from xzx_ui) on purpose: the tray
+        # agent deliberately carries no UI/tkinter dependency, just PIL for
+        # this one icon — see the module docstring.
         img = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
         d   = ImageDraw.Draw(img)
-        d.ellipse((2, 2, 62, 62), fill="#000000", outline="#ffffff", width=3)
-        d.text((20, 20), "X", fill="#ffffff")
+        d.ellipse((2, 2, 62, 62), fill="#070a0e", outline="#2dd4ea", width=3)
+        d.text((20, 20), "X", fill="#2dd4ea")
 
         def on_discord(icon, item):
             webbrowser.open(DISCORD_URL)

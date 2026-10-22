@@ -74,10 +74,10 @@ def _ensure_deps():
         pass
     win = tk.Tk()
     win.title("XZX Fishing — setup")
-    win.configure(bg="#000000")
+    win.configure(bg=ui.BG)
     win.geometry("360x110")
     tk.Label(win, text="First-time setup\nInstalling mss + numpy…\n(about a minute)",
-             bg="#000000", fg="#ffffff", font=("Segoe UI", 11)).pack(expand=True)
+             bg=ui.BG, fg=ui.FG, font=("Segoe UI", 11)).pack(expand=True)
     win.update()
     import subprocess
     flags = 0x08000000 if IS_WIN else 0
@@ -427,8 +427,8 @@ class Fisher:
     def log(self, msg):
         self.out.put(("log", time.strftime("%H:%M:%S ") + msg))
 
-    def status(self, text, colour="#4cc38a"):
-        self.out.put(("status", text, colour))
+    def status(self, text, colour=None):
+        self.out.put(("status", text, colour or ui.GREEN))
 
     def counts(self):
         self.out.put(("counts", self.caught, self.lost))
@@ -522,11 +522,11 @@ class Fisher:
         return True
 
     def wait_bite(self):
-        self.status("Waiting for a bite...", "#e0b34a")
+        self.status("Waiting for a bite...", ui.YELLOW)
         return self.wait_for(find_skill, S["bite_timeout"], stable=2) is not None
 
     def skill_check(self):
-        self.status("Reeling it in!", "#4aa3e0")
+        self.status("Reeling it in!", ui.CYAN)
         self.log("Fish hooked")
         fish_v = bar_v = 0.0
         last = None
@@ -548,7 +548,7 @@ class Fisher:
                 gone_since = None
                 if s["red"] and not said_red:
                     said_red = True
-                    self.status("Legendary fish! Reeling...", "#e05a5a")
+                    self.status("Legendary fish! Reeling...", ui.RED)
                     self.log("Red bar - legendary fish")
                 bl, br = s["bar"]
                 bar_c = (bl + br) / 2.0
@@ -600,7 +600,7 @@ class Fisher:
         """Test mode: report what it sees, press nothing."""
         img = self.screen.grab()
         if img.max() < 8:
-            self.status("Screen looks black - use Windowed Borderless", "#e05a5a")
+            self.status("Screen looks black - use Windowed Borderless", ui.RED)
             return
         c, s = find_cast(img), find_skill(img)
         k = keep_score(img) > 0.7
@@ -609,13 +609,13 @@ class Fisher:
         else:
             self.screen.miss()
         if c:
-            self.status("I can see: the CAST bar", "#c38ae0")
+            self.status("I can see: the CAST bar", ui.ACCENT)
         elif s:
-            self.status("I can see: the SKILL CHECK", "#c38ae0")
+            self.status("I can see: the SKILL CHECK", ui.ACCENT)
         elif k:
-            self.status("I can see: the KEEP prompt", "#c38ae0")
+            self.status("I can see: the KEEP prompt", ui.ACCENT)
         else:
-            self.status("I can see: nothing fishing-related", "#8a93a6")
+            self.status("I can see: nothing fishing-related", ui.MUTED)
 
     def thread_main(self):
         self._sct = None
