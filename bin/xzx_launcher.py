@@ -815,18 +815,17 @@ class HubWindow(Draggable):
         # one flat black layer — no gradient, nothing floating behind it —
         # plus a light snowfall so the sidebar/content "card" below reads
         # as floating over the background instead of being the window.
-        M = 30  # margin around the sidebar+content card — generous on all
+        M = 42  # margin around the sidebar+content card — generous on all
                 # 4 sides so the falling snow reads across the window, not
                 # as a thin sliver down the edges
         bgcv = tk.Canvas(self.root, width=HUB_W, height=HUB_H,
                          highlightthickness=0, bg=ui.BG)
         bgcv.place(x=0, y=0)
-        self._snow = ui.Snowfall(bgcv, HUB_W, HUB_H, count=140)
+        self._snow = ui.Snowfall(bgcv, HUB_W, HUB_H, count=190)
         self._snow.start()
 
         # ── custom title bar ──────────────────────────────────────────────
-        bar = tk.Frame(self.root, bg=ui.PANEL2,
-                       highlightbackground=ui.BORDER, highlightthickness=1,
+        bar = tk.Frame(self.root, bg=ui.PANEL2, highlightthickness=0,
                        height=34)
         bar.place(x=0, y=0, width=HUB_W, height=34)
         self._make_draggable(bar)
@@ -859,8 +858,7 @@ class HubWindow(Draggable):
         # ── sidebar ───────────────────────────────────────────────────────
         SB_Y = 34 + M   # gap below the title bar too, so snow shows above
                         # the card as well as around its other 3 sides
-        sb = tk.Frame(self.root, bg=ui.PANEL2,
-                      highlightbackground=ui.BORDER, highlightthickness=1)
+        sb = tk.Frame(self.root, bg=ui.PANEL2, highlightthickness=0)
         sb.place(x=M, y=SB_Y, width=ui.SIDEBAR_W, height=HUB_H-SB_Y-M)
         sb.pack_propagate(False)
 
@@ -868,7 +866,6 @@ class HubWindow(Draggable):
                             bg=ui.PANEL2, highlightthickness=0)
         logo_sb.pack(fill="x")
         self.root.after(25, lambda: self._draw_logo_sidebar(logo_sb))
-        tk.Frame(sb, bg=ui.BORDER, height=1).pack(fill="x")
 
         self._sbtns = {}
         for m in self.owned_list:
@@ -879,7 +876,7 @@ class HubWindow(Draggable):
             self._sbtns[m["id"]] = btn
         # The Hub opens macros, plus one Settings tab for accent colour and
         # the close hotkey — no sprawling second section, just that.
-        tk.Frame(sb, bg=ui.BORDER, height=1).pack(fill="x", pady=(8,0))
+        tk.Frame(sb, bg=ui.PANEL2, height=8).pack(fill="x")
         settings_btn = ui.SideIconBtn(sb, "⚙", "Settings", active_color=ui.ACCENT)
         settings_btn.frame.pack(fill="x")
         settings_btn.bind("<Button-1>", lambda e: self._show("settings"))
@@ -949,7 +946,6 @@ class HubWindow(Draggable):
         f.pack_propagate(False)
 
         # accent top strip
-        tk.Frame(f, bg=ui.ACCENT, height=3).pack(fill="x")
 
         body = tk.Frame(f, bg=ui.PANEL)
         body.place(relx=0.5, rely=0.5, anchor="center")
@@ -1010,7 +1006,6 @@ class HubWindow(Draggable):
     def _mk_settings_panel(self, w, h):
         f = tk.Frame(self.cont, bg=ui.PANEL, width=w, height=h)
         f.pack_propagate(False)
-        tk.Frame(f, bg=ui.ACCENT, height=3).pack(fill="x")
 
         hdr = tk.Frame(f, bg=ui.PANEL2, height=52)
         hdr.pack(fill="x"); hdr.pack_propagate(False)
@@ -1022,7 +1017,6 @@ class HubWindow(Draggable):
                  font=("Segoe UI Black", 13)).pack(anchor="w")
         tk.Label(info, text="Accent colour and the Hub's close hotkey",
                  bg=ui.PANEL2, fg=ui.MUTED, font=("Segoe UI", 8)).pack(anchor="w")
-        tk.Frame(f, bg=ui.BORDER2, height=1).pack(fill="x")
 
         body = tk.Frame(f, bg=ui.PANEL)
         body.pack(fill="both", expand=True, padx=24, pady=20)
@@ -1088,7 +1082,6 @@ class HubWindow(Draggable):
         f = tk.Frame(self.cont, bg=ui.PANEL, width=w, height=h)
         f.pack_propagate(False)
 
-        tk.Frame(f, bg=ui.ACCENT, height=3).pack(fill="x")
 
         hdr = tk.Frame(f, bg=ui.PANEL2, height=52)
         hdr.pack(fill="x"); hdr.pack_propagate(False)
@@ -1187,7 +1180,6 @@ class HubWindow(Draggable):
         f.pack_propagate(False)
 
         # ── coloured top accent strip ─────────────────────────────────────
-        tk.Frame(f, bg=m["color"], height=3).pack(fill="x")
 
         # ── header row ────────────────────────────────────────────────────
         hdr = tk.Frame(f, bg=ui.PANEL2, height=52)
@@ -1210,7 +1202,6 @@ class HubWindow(Draggable):
         badge.frame.place(relx=1.0, rely=0.5, anchor="e", x=-14)
         m["_badge"] = badge
 
-        tk.Frame(f, bg=ui.BORDER2, height=1).pack(fill="x")
 
         body = tk.Frame(f, bg=ui.PANEL)
         body.pack(fill="both", expand=True, padx=24, pady=18)
@@ -1226,7 +1217,6 @@ class HubWindow(Draggable):
                      highlightbackground=m["color"],
                      highlightthickness=1).pack(side="left", padx=3)
 
-        tk.Frame(body, bg=ui.BORDER2, height=1).pack(fill="x", pady=(0,16))
 
         # ── big LAUNCH button ─────────────────────────────────────────────
         # every macro accent colour is light now (white/grey/green) — black
@@ -1242,18 +1232,7 @@ class HubWindow(Draggable):
         lb.bind("<Enter>", lambda e, b=lb: b.configure(bg=ui.ACCENT))
         lb.bind("<Leave>", lambda e, b=lb, c=m["color"]: b.configure(bg=c))
 
-        # ── STOP button (smaller, ghost style) ───────────────────────────
-        sb2 = tk.Button(body, text="■   STOP MACRO",
-                        bg=ui.PANEL2, fg=ui.RED,
-                        activebackground=ui.RED, activeforeground="white",
-                        relief="flat", font=("Segoe UI Semibold", 10),
-                        cursor="hand2", pady=9,
-                        highlightbackground=ui.BORDER2, highlightthickness=1,
-                        command=lambda mid=m["id"]: self._stop(mid))
-        sb2.pack(fill="x", pady=(8, 0))
-
         # ── status row ────────────────────────────────────────────────────
-        tk.Frame(body, bg=ui.BORDER2, height=1).pack(fill="x", pady=(16,8))
         sr = tk.Frame(body, bg=ui.PANEL)
         sr.pack(fill="x")
         tk.Label(sr, text="STATUS", bg=ui.PANEL, fg=ui.MUTED,

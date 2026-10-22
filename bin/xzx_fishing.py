@@ -681,8 +681,8 @@ class FishingMacro(ui.Draggable):
         self.root = tk.Tk()
         self.root.geometry(f"{WIN_W}x{WIN_H}")
         self.root.resizable(False, False)
-        self._center()
         ui.frameless(self.root, WIN_W, WIN_H, radius=20)
+        self._center()
         self._build()
         self.root.protocol("WM_DELETE_WINDOW", self._quit)
 
@@ -703,17 +703,16 @@ class FishingMacro(ui.Draggable):
 
     # ── layout ───────────────────────────────────────────────────────────────
     def _build(self):
-        M = 28  # margin around the sidebar+content card, all 4 sides — a
+        M = 36  # margin around the sidebar+content card, all 4 sides — a
                 # real band of visible background, not a thin edge sliver
         bgcv = tk.Canvas(self.root, width=WIN_W, height=WIN_H, highlightthickness=0, bg=ui.BG)
         bgcv.place(x=0, y=0)
-        self._snow = ui.Snowfall(bgcv, WIN_W, WIN_H, count=90)
+        self._snow = ui.Snowfall(bgcv, WIN_W, WIN_H, count=130)
         self._snow.start()
         self.badge = ui.macro_header(self, WIN_W, "🎣", "FISHING MACRO", ui.ACCENT)
-        tk.Frame(self.root, bg=ui.ACCENT, height=2).place(x=0, y=ui.HEADER_H, width=WIN_W)
 
         TOP_Y = ui.HEADER_H + 2 + M
-        sb = tk.Frame(self.root, bg=ui.PANEL2, highlightbackground=ui.BORDER, highlightthickness=1)
+        sb = tk.Frame(self.root, bg=ui.PANEL2, highlightthickness=0)
         sb.place(x=M, y=TOP_Y, width=ui.SIDEBAR_W, height=WIN_H-TOP_Y-M)
         self._stabs = []
         for i, (ico, name) in enumerate([("🎣", "Macro"), ("📊", "Stats"), ("⚙", "Settings")]):
@@ -741,20 +740,17 @@ class FishingMacro(ui.Draggable):
         self._status_lbl = tk.Label(body, text="Idle", bg=ui.PANEL, fg=ui.MUTED,
                                      font=("Segoe UI Semibold", 9))
         self._status_lbl.pack(pady=(0,8))
-        tk.Frame(body, bg=ui.BORDER2, height=1).pack(fill="x")
         tiles = tk.Frame(body, bg=ui.PANEL); tiles.pack(fill="x", pady=10)
         self._t_caught = ui.StatTile(tiles, "CAUGHT", "0", accent=ui.GREEN)
         self._t_caught.frame.pack(side="left", expand=True, fill="both", padx=(0,4))
         self._t_lost = ui.StatTile(tiles, "GOT AWAY", "0", accent=ui.RED)
         self._t_lost.frame.pack(side="left", expand=True, fill="both", padx=(4,0))
-        tk.Frame(body, bg=ui.BORDER2, height=1).pack(fill="x", pady=(0,10))
         self._toggle = ui.ToggleButton(body, self._on_toggle, start_bg=ui.ACCENT,
                                         start_label="▶  START FISHING", stop_label="■  STOP FISHING",
                                         stop_bg=ui.RED)
         self._toggle.btn.pack(fill="x", ipady=4); self._toggle.btn.configure(fg=ui.BG)
         ui.hotkey_row(body, [("F5","Start"), ("F6","Stop"), ("F10","Close")],
                       bg=ui.PANEL).pack(fill="x", pady=(8,0))
-        tk.Frame(body, bg=ui.BORDER2, height=1).pack(fill="x", pady=(8,4))
         self._log, sb2 = ui.log_box(body, height=5)
         sb2.pack(side="right", fill="y"); self._log.pack(side="left", fill="both", expand=True)
         return f
@@ -763,7 +759,6 @@ class FishingMacro(ui.Draggable):
         f = tk.Frame(self.cont, bg=ui.PANEL, width=w, height=h)
         body = tk.Frame(f, bg=ui.PANEL); body.pack(fill="both", expand=True, padx=20, pady=20)
         tk.Label(body, text="SESSION STATS", bg=ui.PANEL, fg=ui.MUTED, font=("Segoe UI Semibold", 8)).pack(anchor="w")
-        tk.Frame(body, bg=ui.BORDER2, height=1).pack(fill="x", pady=(4,12))
         def row(lbl):
             r = tk.Frame(body, bg=ui.PANEL); r.pack(fill="x", pady=4)
             tk.Label(r, text=lbl, bg=ui.PANEL, fg=ui.MUTED, font=("Segoe UI",9)).pack(side="left")
@@ -786,7 +781,6 @@ class FishingMacro(ui.Draggable):
         self.v_monitor.trace_add("write", lambda *a: self.f.reset_screen())
         ui.dropdown(mon_row, self.v_monitor, [m[0] for m in self._monitors], width=16).pack(side="right")
 
-        tk.Frame(body, bg=ui.BORDER2, height=1).pack(fill="x", pady=6)
         ui.section_label(body, "Rod", bg=ui.PANEL)
         rod_row = tk.Frame(body, bg=ui.PANEL); rod_row.pack(fill="x", pady=5)
         tk.Label(rod_row, text="Rod slot key", bg=ui.PANEL, fg=ui.FG2, font=("Segoe UI",9)).pack(side="left")
@@ -794,7 +788,6 @@ class FishingMacro(ui.Draggable):
         self.v_rod.trace_add("write", lambda *a: S.__setitem__("rod_key", self.v_rod.get()))
         ui.dropdown(rod_row, self.v_rod, list("1234567890"), width=4).pack(side="right")
 
-        tk.Frame(body, bg=ui.BORDER2, height=1).pack(fill="x", pady=6)
         ui.section_label(body, "Behaviour", bg=ui.PANEL)
         self.v_watch = tk.BooleanVar(value=False)
         wr = tk.Frame(body, bg=ui.PANEL); wr.pack(fill="x", pady=5)
@@ -803,7 +796,6 @@ class FishingMacro(ui.Draggable):
         ui.Switch(wr, self.v_watch, command=lambda: setattr(self.f, "watch_only", self.v_watch.get()),
                   bg=ui.PANEL).pack(side="right")
 
-        tk.Frame(body, bg=ui.BORDER2, height=1).pack(fill="x", pady=6)
         # Fine-tuning knobs most people never touch after first setup — tucked
         # behind "Advanced" instead of all five showing by default, so the
         # settings tab isn't a wall of sliders before you've even started.

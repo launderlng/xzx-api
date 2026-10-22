@@ -19,16 +19,16 @@ GRAD2    = "#000000"
 GRAD3    = "#000000"
 PANEL    = "#000000"          # pure black, as asked — every separate
 PANEL2   = "#000000"          # window (Hub, the 3 macros, the Login card)
-PANEL3   = "#000000"          # is now flat black; BORDER/BORDER2 outlines
-                               # alone carry card edges and hierarchy.
+PANEL3   = "#000000"          # is now flat black; nothing remaining draws
+                               # a visible line — BORDER/BORDER2 are black too.
 ACCENT   = "#ffffff"          # pure white — the one "bold" colour is no colour at all
 ACCENT2  = "#dcdcdc"          # a hair off pure white, so hover has somewhere to brighten to
 ACCENT3  = "#4d4d4d"
 FG       = "#ffffff"
 FG2      = "#c2c2c2"
 MUTED    = "#6b6b6b"
-BORDER   = "#333333"
-BORDER2  = "#2a2a2a"
+BORDER   = "#000000"          # was a grey outline — now matches the background
+BORDER2  = "#000000"          # so every remaining card/badge edge is invisible
 GREEN    = "#3ddc74"
 GREEN2   = "#27b65c"
 RED      = "#ff4d5e"
@@ -760,7 +760,6 @@ class StatTile:
     def __init__(self, parent, name, value="0", accent=ACCENT, bg=PANEL):
         self.frame = RoundFrame(parent, bg=bg, border=BORDER2, border_w=1, r=18)
         body = self.frame.body
-        tk.Frame(body, bg=accent, height=2).pack(fill="x")
         inn = tk.Frame(body, bg=bg)
         inn.pack(fill="both", expand=True, padx=12, pady=8)
         self.var = tk.StringVar(value=value)
@@ -1076,8 +1075,7 @@ def macro_header(owner, w: int, icon: str, title: str, accent: str):
     of the Hub instead of a different app. `owner` must mix in Draggable
     and expose `.root`; returns the StatusBadge for the caller to drive.
     """
-    hdr = tk.Frame(owner.root, bg=PANEL2,
-                   highlightbackground=BORDER, highlightthickness=1)
+    hdr = tk.Frame(owner.root, bg=PANEL2, highlightthickness=0)
     hdr.place(x=0, y=0, width=w, height=HEADER_H)
     owner._make_draggable(hdr)
 

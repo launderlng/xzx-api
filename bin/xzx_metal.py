@@ -106,8 +106,8 @@ class MetalMacro(ui.Draggable):
         self.root = tk.Tk()
         self.root.geometry(f"{WIN_W}x{WIN_H}")
         self.root.resizable(False, False)
-        self._center()
         ui.frameless(self.root, WIN_W, WIN_H, radius=20)
+        self._center()
         self._build()
         self.root.protocol("WM_DELETE_WINDOW", self._quit)
         self._hotkey_poll()
@@ -146,25 +146,22 @@ class MetalMacro(ui.Draggable):
         self.root.geometry(f"{WIN_W}x{WIN_H}+{(sw-WIN_W)//2}+{(sh-WIN_H)//2}")
 
     def _build(self):
-        M = 28  # margin around the sidebar+content card, all 4 sides — a
+        M = 36  # margin around the sidebar+content card, all 4 sides — a
                 # real band of visible background, not a thin edge sliver
         bgcv = tk.Canvas(self.root, width=WIN_W, height=WIN_H,
                          highlightthickness=0, bg=ui.BG)
         bgcv.place(x=0, y=0)
         bgcv.configure(bg=ui.BG)   # flat black — matches the launcher/Hub theme now
-        self._snow = ui.Snowfall(bgcv, WIN_W, WIN_H, count=90)
+        self._snow = ui.Snowfall(bgcv, WIN_W, WIN_H, count=130)
         self._snow.start()
 
         # header
         self.badge = ui.macro_header(self, WIN_W, "🔍", "METAL DETECTOR", ui.ACCENT)
 
-        tk.Frame(self.root, bg=ui.ACCENT, height=2).place(
-            x=0, y=ui.HEADER_H, width=WIN_W)
-
         # sidebar
         TOP_Y = ui.HEADER_H + 2 + M
         sb = tk.Frame(self.root, bg=ui.PANEL2,
-                      highlightbackground=ui.BORDER, highlightthickness=1)
+                      highlightthickness=0)
         sb.place(x=M, y=TOP_Y,
                  width=ui.SIDEBAR_W, height=WIN_H-TOP_Y-M)
 
@@ -200,7 +197,6 @@ class MetalMacro(ui.Draggable):
         tk.Label(body, text="GDI pixel scan — auto skill-check",
                  bg=ui.PANEL, fg=ui.MUTED, font=("Segoe UI", 9)).pack(pady=(2,16))
 
-        tk.Frame(body, bg=ui.BORDER2, height=1).pack(fill="x")
 
         tiles = tk.Frame(body, bg=ui.PANEL)
         tiles.pack(fill="x", pady=12)
@@ -209,7 +205,6 @@ class MetalMacro(ui.Draggable):
         self._t_misses = ui.StatTile(tiles, "MISSES", "0", accent=ui.RED)
         self._t_misses.frame.pack(side="left", expand=True, fill="both", padx=(4,0))
 
-        tk.Frame(body, bg=ui.BORDER2, height=1).pack(fill="x", pady=(0,12))
 
         self._toggle = ui.ToggleButton(body, self._on_toggle,
                                         start_label="▶  START SCANNING",
@@ -220,7 +215,6 @@ class MetalMacro(ui.Draggable):
         ui.hotkey_row(body, [("F7","Start"),("F8","Stop"),("F10","Close")],
                       bg=ui.PANEL).pack(fill="x", pady=(10,0))
 
-        tk.Frame(body, bg=ui.BORDER2, height=1).pack(fill="x", pady=(10,4))
         self._log, sb2 = ui.log_box(body, height=5)
         sb2.pack(side="right", fill="y")
         self._log.pack(side="left", fill="both", expand=True)
@@ -232,7 +226,6 @@ class MetalMacro(ui.Draggable):
         body.pack(fill="both", expand=True, padx=20, pady=20)
         tk.Label(body, text="SESSION STATS", bg=ui.PANEL, fg=ui.MUTED,
                  font=("Segoe UI Semibold", 8)).pack(anchor="w")
-        tk.Frame(body, bg=ui.BORDER2, height=1).pack(fill="x", pady=(4,12))
 
         def row(lbl):
             r = tk.Frame(body, bg=ui.PANEL); r.pack(fill="x", pady=4)
@@ -262,7 +255,6 @@ class MetalMacro(ui.Draggable):
         ui.dropdown(mon_row, self.v_monitor, [m[0] for m in self._monitors],
                     width=16).pack(side="right")
 
-        tk.Frame(body, bg=ui.BORDER2, height=1).pack(fill="x", pady=8)
         ui.section_label(body, "Scan Region (on chosen monitor)", bg=ui.PANEL)
 
         def row(lbl, default, lo, hi):
@@ -276,7 +268,6 @@ class MetalMacro(ui.Draggable):
         self.v_scan_x = row("Scan X",  900, 0, 3840)
         self.v_scan_y = row("Scan Y",  500, 0, 2160)
 
-        tk.Frame(body, bg=ui.BORDER2, height=1).pack(fill="x", pady=8)
 
         def rowf(parent, lbl, default, lo, hi):
             r = tk.Frame(parent, bg=ui.PANEL); r.pack(fill="x", pady=5)
