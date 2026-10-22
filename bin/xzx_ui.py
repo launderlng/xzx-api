@@ -15,11 +15,12 @@ import os, sys, random, math, time as _time
 # card needs to actually read as a card against the background.
 BG       = "#000000"          # true black
 GRAD1    = "#000000"
-GRAD2    = "#0a0a0a"
+GRAD2    = "#000000"
 GRAD3    = "#000000"
-PANEL    = "#141414"
-PANEL2   = "#0a0a0a"
-PANEL3   = "#1c1c1c"
+PANEL    = "#000000"          # pure black, as asked — every separate
+PANEL2   = "#000000"          # window (Hub, the 3 macros, the Login card)
+PANEL3   = "#000000"          # is now flat black; BORDER/BORDER2 outlines
+                               # alone carry card edges and hierarchy.
 ACCENT   = "#ffffff"          # pure white — the one "bold" colour is no colour at all
 ACCENT2  = "#dcdcdc"          # a hair off pure white, so hover has somewhere to brighten to
 ACCENT3  = "#4d4d4d"

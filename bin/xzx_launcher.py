@@ -242,11 +242,11 @@ class LoginWindow(Draggable):
         self._center()
         self.root.after(60, lambda: ui.round_window(
             self.root, WIN_W, WIN_H, self.RADIUS))
-        # subtle glass-like translucency — safe now that the window is
-        # genuinely clipped to rounded corners (this used to cause ghosting
-        # when combined with a square window + a separately-rounded card)
-        try: self.root.attributes("-alpha", 0.94)
-        except Exception: pass
+        # NOTE: deliberately no -alpha here. Window transparency on a
+        # borderless Tk window combined with a GDI-clipped region makes the
+        # WHOLE window translucent on real hardware, not just a subtle
+        # glass effect — it was letting whatever sat behind it (Discord,
+        # the desktop) bleed straight through. Fully opaque now.
         try: self.root.attributes("-topmost", True)
         except Exception: pass
         self._build()
@@ -407,37 +407,21 @@ class LoginWindow(Draggable):
             self._setstatus(f"Previous session: {tag} — re-authorise to continue", ui.MUTED)
 
     def _draw_logo(self, cv, w, h):
-        # A soft glow behind the wordmark — the one bit of "premium" weight
-        # on this screen, sitting on the same canvas as the falling snow.
+        # No shape, no glow rings, no second layer behind it — just the
+        # wordmark sitting directly on the canvas. (A glow was tried here
+        # and rendered as a solid blown-out white circle instead of a soft
+        # halo — removed rather than re-guessed at blind.)
         cx, cy = w // 2, h // 2
-        ui.glow(cv, cx, cy, 30, colour=ui.ACCENT, rings=3)
         cv.create_text(cx, cy, text="XZX", fill=ui.FG,
-                       font=("Segoe UI Black", 26))
+                       font=("Segoe UI Black", 24))
 
     def _paint_bg(self):
         # one flat layer: pure black, nothing drawn under or behind it —
-        # the star particles (started in __init__) are the only other thing
-        # on this canvas, so there's never a second "panel" floating on top.
+        # the snow particles (started below) are the only other thing on
+        # this canvas, so there's never a second "panel" floating on top.
+        # No separator line, no sweep animation — those read as a UI glitch
+        # rather than a design flourish, so they're gone.
         self.cv.configure(bg=ui.BG)
-        self.cv.create_rectangle(0, 30, WIN_W, 31, fill=ui.BORDER, outline="")
-        self._draw_scanline()
-
-    def _draw_scanline(self):
-        """One orchestrated reveal moment: a signal sweep crosses the card
-        once on open, tying back to what XZX actually sells (detection
-        macros) instead of a generic fade-in."""
-        line = self.cv.create_line(0, 34, WIN_W, 34, fill=ui.ACCENT, width=1)
-        glow = self.cv.create_rectangle(0, 32, WIN_W, 36, fill=ui.ACCENT, outline="", stipple="gray12")
-
-        def step(y=34):
-            if y > WIN_H - 20:
-                self.cv.delete(line); self.cv.delete(glow)
-                return
-            self.cv.coords(line, 0, y, WIN_W, y)
-            self.cv.coords(glow, 0, y - 4, WIN_W, y + 4)
-            self.root.after(6, lambda: step(y + 6))
-
-        self.root.after(250, step)
 
     def _setstatus(self, t, c=ui.MUTED):
         self.stat_var.set(t); self.stat_lbl.configure(fg=c)
