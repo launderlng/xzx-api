@@ -312,19 +312,19 @@ class LoginWindow(Draggable):
         inn = tk.Frame(cbody, bg=ui.PANEL)
         inn.pack(fill="both", expand=True, padx=26, pady=26)
 
-        # ── Discord mark — the user's own Discord logo image, on a
-        # blurple roundel backdrop ──────────────────────────────────────────
-        dmark = tk.Canvas(inn, width=52, height=52, bg=ui.PANEL,
+        # ── Discord mark — the user's own Discord logo image, sitting
+        # directly on the black background, no roundel behind it ───────────
+        dmark = tk.Canvas(inn, width=64, height=52, bg=ui.PANEL,
                            highlightthickness=0)
         dmark.pack(pady=(0, 12))
-        dmark.create_oval(2, 2, 50, 50, fill="#5865F2", outline="")
-        dimg = ui.logo_image(size=28, bg=(0x58, 0x65, 0xF2))
+        dimg = ui.logo_image(size=48, bg=(0, 0, 0))
         if dimg is not None:
             self._dmark_img = dimg  # keep a reference so Tk doesn't drop it
-            dmark.create_image(26, 26, image=dimg)
+            dmark.create_image(32, 26, image=dimg)
         else:
-            dmark.create_oval(16, 22, 24, 32, fill="white", outline="")
-            dmark.create_oval(28, 22, 36, 32, fill="white", outline="")
+            dmark.create_oval(20, 10, 44, 34, fill="#5865F2", outline="")
+            dmark.create_oval(26, 18, 32, 26, fill="white", outline="")
+            dmark.create_oval(34, 18, 40, 26, fill="white", outline="")
 
         tk.Label(inn, text="Sign in with Discord",
                  bg=ui.PANEL, fg=ui.FG,
