@@ -799,11 +799,13 @@ class HubWindow(Draggable):
         # one flat black layer — no gradient, nothing floating behind it —
         # plus a light snowfall so the sidebar/content "card" below reads
         # as floating over the background instead of being the window.
-        M = 14  # margin left around the sidebar+content card
+        M = 30  # margin around the sidebar+content card — generous on all
+                # 4 sides so the falling snow reads across the window, not
+                # as a thin sliver down the edges
         bgcv = tk.Canvas(self.root, width=HUB_W, height=HUB_H,
                          highlightthickness=0, bg=ui.BG)
         bgcv.place(x=0, y=0)
-        self._snow = ui.Snowfall(bgcv, HUB_W, HUB_H, count=55)
+        self._snow = ui.Snowfall(bgcv, HUB_W, HUB_H, count=80)
         self._snow.start()
 
         # ── custom title bar ──────────────────────────────────────────────
@@ -839,7 +841,8 @@ class HubWindow(Draggable):
                  font=("Segoe UI Semibold", 8)).pack(side="right", padx=(0,4))
 
         # ── sidebar ───────────────────────────────────────────────────────
-        SB_Y = 34
+        SB_Y = 34 + M   # gap below the title bar too, so snow shows above
+                        # the card as well as around its other 3 sides
         sb = tk.Frame(self.root, bg=ui.PANEL2,
                       highlightbackground=ui.BORDER, highlightthickness=1)
         sb.place(x=M, y=SB_Y, width=ui.SIDEBAR_W, height=HUB_H-SB_Y-M)
