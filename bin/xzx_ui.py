@@ -101,15 +101,20 @@ _XZX_LOGO_PNG_B64 = (
 _LOGO_CACHE: dict = {}
 
 
-def logo_image(size: int = 48):
-    """Decodes the embedded XZX logo PNG and returns a cached, alpha-composited
-    ImageTk.PhotoImage scaled to `size` px tall (aspect-preserved). Composited
-    against pure black so the image's own transparency reads correctly on a
-    Tkinter Canvas, which has no real alpha blending of its own. Returns None
-    (caller should fall back to the text wordmark) if Pillow can't load it —
-    Pillow is already a BUILD.bat dependency, so this is just a safety net."""
-    if size in _LOGO_CACHE:
-        return _LOGO_CACHE[size]
+def logo_image(size: int = 48, bg=(0, 0, 0)):
+    """Decodes the embedded Discord mark PNG (the user's own asset — used
+    on the Login screen's Discord sign-in roundel) and returns a cached,
+    alpha-composited ImageTk.PhotoImage scaled to `size` px tall (aspect-
+    preserved). Composited against `bg` (an (r,g,b) tuple) so the image's own
+    transparency reads correctly on a Tkinter Canvas, which has no real alpha
+    blending of its own — pass the exact colour it will sit on (e.g. the
+    blurple roundel), not just black, or the edges show a mismatched box.
+    Returns None (caller should fall back to a drawn glyph) if Pillow can't
+    load it — Pillow is already a BUILD.bat dependency, so this is just a
+    safety net. Cached per (size, bg) pair."""
+    key = (size, tuple(bg))
+    if key in _LOGO_CACHE:
+        return _LOGO_CACHE[key]
     try:
         from PIL import Image, ImageTk
         raw = base64.b64decode(_XZX_LOGO_PNG_B64)
@@ -118,10 +123,10 @@ def logo_image(size: int = 48):
         new_h = size
         new_w = max(1, round(w * (new_h / h)))
         im = im.resize((new_w, new_h), Image.LANCZOS)
-        bg = Image.new("RGBA", im.size, (0, 0, 0, 255))
-        bg.alpha_composite(im)
-        photo = ImageTk.PhotoImage(bg.convert("RGB"))
-        _LOGO_CACHE[size] = photo
+        canvas_bg = Image.new("RGBA", im.size, (bg[0], bg[1], bg[2], 255))
+        canvas_bg.alpha_composite(im)
+        photo = ImageTk.PhotoImage(canvas_bg.convert("RGB"))
+        _LOGO_CACHE[key] = photo
         return photo
     except Exception:
         return None

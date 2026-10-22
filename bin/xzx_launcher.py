@@ -312,14 +312,19 @@ class LoginWindow(Draggable):
         inn = tk.Frame(cbody, bg=ui.PANEL)
         inn.pack(fill="both", expand=True, padx=26, pady=26)
 
-        # ── Discord mark — a simple blurple roundel, not the emoji
-        # controller glyph that used to sit here ───────────────────────────
+        # ── Discord mark — the user's own Discord logo image, on a
+        # blurple roundel backdrop ──────────────────────────────────────────
         dmark = tk.Canvas(inn, width=52, height=52, bg=ui.PANEL,
                            highlightthickness=0)
         dmark.pack(pady=(0, 12))
         dmark.create_oval(2, 2, 50, 50, fill="#5865F2", outline="")
-        dmark.create_oval(16, 22, 24, 32, fill="white", outline="")
-        dmark.create_oval(28, 22, 36, 32, fill="white", outline="")
+        dimg = ui.logo_image(size=28, bg=(0x58, 0x65, 0xF2))
+        if dimg is not None:
+            self._dmark_img = dimg  # keep a reference so Tk doesn't drop it
+            dmark.create_image(26, 26, image=dimg)
+        else:
+            dmark.create_oval(16, 22, 24, 32, fill="white", outline="")
+            dmark.create_oval(28, 22, 36, 32, fill="white", outline="")
 
         tk.Label(inn, text="Sign in with Discord",
                  bg=ui.PANEL, fg=ui.FG,
@@ -819,14 +824,8 @@ class HubWindow(Draggable):
 
     def _draw_logo_sidebar(self, cv):
         cx, cy = ui.SIDEBAR_W//2, 30
-        img = ui.logo_image(size=34)
-        if img is not None:
-            self._sidebar_logo_img = img  # keep a reference — Tk drops the
-                                           # image if nothing holds onto it
-            cv.create_image(cx, cy, image=img)
-        else:
-            cv.create_text(cx, cy, text="XZX", fill=ui.FG,
-                           font=("Segoe UI Black", 10))
+        cv.create_text(cx, cy, text="XZX", fill=ui.FG,
+                       font=("Segoe UI Black", 10))
 
     # ── Discord link panel ─────────────────────────────────────────────────────
     def _mk_link_panel(self, w, h):
