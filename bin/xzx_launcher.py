@@ -369,7 +369,7 @@ class LoginWindow(Draggable):
         self.key_btn = ui.RoundButton(inn, "Activate Key",
                                       self._activate_key,
                                       w=BTN_W, h=40, r=11,
-                                      bg=ui.ACCENT2, hover="#e2e2e2",
+                                      bg=ui.ACCENT2, hover=ui.ACCENT,
                                       font=("Segoe UI Black", 10),
                                       parent_bg=ui.PANEL)
         self.key_btn.pack(pady=(10, 0))
@@ -1002,12 +1002,12 @@ class HubWindow(Draggable):
 
         btn = tk.Button(body, text="  🔗   Link Discord Account  ",
                         bg=ui.ACCENT2, fg=ui.BG,
-                        activebackground="#e2e2e2", activeforeground=ui.BG,
+                        activebackground=ui.ACCENT, activeforeground=ui.BG,
                         relief="flat", font=("Segoe UI Black", 11),
                         cursor="hand2", pady=13,
                         command=self._link_discord)
         btn.pack(fill="x", padx=20)
-        btn.bind("<Enter>", lambda e: btn.configure(bg="#e2e2e2"))
+        btn.bind("<Enter>", lambda e: btn.configure(bg=ui.ACCENT))
         btn.bind("<Leave>", lambda e: btn.configure(bg=ui.ACCENT2))
 
         self._link_status = tk.Label(body, text="",
@@ -1077,7 +1077,7 @@ class HubWindow(Draggable):
         tk.Label(prev_inner, text="PREVIEW", bg=ui.PANEL2, fg=ui.MUTED,
                  font=("Segoe UI", 8)).pack(side="left")
         tk.Button(prev_inner, text="▶  START", bg=ui.ACCENT, fg=ui.BG,
-                  activebackground="#e2e2e2", activeforeground=ui.BG,
+                  activebackground=ui.ACCENT, activeforeground=ui.BG,
                   relief="flat", font=("Segoe UI Black", 9), cursor="hand2",
                   padx=16, pady=6, state="disabled",
                   disabledforeground=ui.BG).pack(side="right")

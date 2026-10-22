@@ -795,9 +795,8 @@ class FishingMacro(ui.Draggable):
         wr = tk.Frame(body, bg=ui.PANEL); wr.pack(fill="x", pady=5)
         tk.Label(wr, text="Test mode (watch only, no key presses)", bg=ui.PANEL, fg=ui.FG2,
                  font=("Segoe UI",9)).pack(side="left")
-        tk.Checkbutton(wr, variable=self.v_watch, command=lambda: setattr(self.f, "watch_only", self.v_watch.get()),
-                       bg=ui.PANEL, selectcolor=ui.PANEL2, activebackground=ui.PANEL,
-                       relief="flat", bd=0).pack(side="right")
+        ui.Switch(wr, self.v_watch, command=lambda: setattr(self.f, "watch_only", self.v_watch.get()),
+                  bg=ui.PANEL).pack(side="right")
 
         tk.Frame(body, bg=ui.BORDER2, height=1).pack(fill="x", pady=6)
         ui.section_label(body, "Timing", bg=ui.PANEL)

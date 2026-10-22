@@ -1,41 +1,37 @@
 """
-XZX shared UI — v5  (mono theme: true black/white, one layer, no colour noise)
+XZX shared UI — v6  (glass theme: cool near-black panels, glowing cyan accent)
 """
 import tkinter as tk
 import os, sys
 
 # ── palette ───────────────────────────────────────────────────────────────────
-# Theme: flat black and white — no navy, no cyan, no gradient-as-decoration.
-# Structure (borders, weight, spacing) carries the hierarchy instead of colour.
-# Status still needs to be legible at a glance (running vs stopped, success vs
-# error), so green/red survive purely as state signals, never as decoration.
-BG       = "#000000"          # true black
-GRAD1    = "#000000"
-GRAD2    = "#0a0a0a"
-GRAD3    = "#000000"          # no real gradient — background is one flat layer
-# PANEL/PANEL2/PANEL3 and the borders are deliberately lifted a notch lighter
-# than true black here (was within a couple of RGB steps of BG) — at that
-# level a rounded card's corners are mathematically rounded but visually
-# indistinguishable from a square one on screen. This keeps the mono
-# black/white language but gives "card vs background" actual contrast.
-PANEL    = "#141414"
-PANEL2   = "#0a0a0a"
-PANEL3   = "#1c1c1c"
-ACCENT   = "#ffffff"          # pure white — the one "bold" colour is no colour at all
-ACCENT2  = "#ffffff"          # secondary accent — also pure white, no off-white/grey tint
-ACCENT3  = "#4d4d4d"
-FG       = "#ffffff"
-FG2      = "#c2c2c2"
-MUTED    = "#6b6b6b"
-BORDER   = "#333333"
-BORDER2  = "#2a2a2a"
+# Theme: dark glass over a cool navy-black, one glowing accent colour that
+# carries "this is active/on", rather than mono's structure-only hierarchy.
+# Panels sit a clear step lighter than BG with a cool (slightly blue) tint
+# instead of a neutral grey, which is what actually reads as "glass panel"
+# rather than "slightly lighter black rectangle".
+BG       = "#070a0e"          # near-black, cool navy tint
+GRAD1    = "#0a0f15"
+GRAD2    = "#0d131a"
+GRAD3    = "#070a0e"
+PANEL    = "#121922"
+PANEL2   = "#0b0f15"
+PANEL3   = "#1b2531"
+ACCENT   = "#2dd4ea"          # glowing cyan — the one accent colour, used sparingly
+ACCENT2  = "#1aa6ba"          # deeper teal-cyan — resting fill; ACCENT is its hover/glow
+ACCENT3  = "#3a4a56"
+FG       = "#eef5f8"
+FG2      = "#9fb3bf"
+MUTED    = "#5f727d"
+BORDER   = "#2c3946"
+BORDER2  = "#1c2730"
 GREEN    = "#3ddc74"
 GREEN2   = "#27b65c"
-RED      = "#ff4d5e"
+RED      = "#ff5a68"
 RED2     = "#e0313f"
-CYAN     = "#b3b3b3"          # second macro accent — light grey, distinct from pure white
-ORANGE   = "#ffffff"
-YELLOW   = "#ffffff"
+CYAN     = "#5fb0ff"          # second macro accent — a cooler blue, distinct from ACCENT's cyan
+ORANGE   = "#ffb454"
+YELLOW   = "#ffd454"
 TAB_UL   = ACCENT             # tab underline
 
 SIDEBAR_W = 52
@@ -321,6 +317,31 @@ def round_rect(canvas, x0, y0, x1, y1, r=14, **kw):
                                   smooth=True, splinesteps=24, **kw)
 
 
+def _lerp_color(widget, c1, c2, t):
+    """Blend two hex colours (t=0 -> c1, t=1 -> c2) using Tk's own RGB
+    resolver so it works for any colour name/hex Tk accepts."""
+    t = max(0.0, min(1.0, t))
+    r1, g1, b1 = widget.winfo_rgb(c1)
+    r2, g2, b2 = widget.winfo_rgb(c2)
+    r = int(r1 + (r2 - r1) * t) >> 8
+    g = int(g1 + (g2 - g1) * t) >> 8
+    b = int(b1 + (b2 - b1) * t) >> 8
+    return f"#{r:02x}{g:02x}{b:02x}"
+
+
+def glow(canvas, cx, cy, radius, colour=None, rings=3):
+    """A soft radial halo behind an active element — concentric stippled
+    circles fading outward. Tk canvases have no real alpha blending, so
+    this dithers it instead; it reads as a glow at the sizes used here."""
+    colour = colour or ACCENT
+    stipples = ["gray12", "gray25", "gray50"][:rings]
+    # draw largest/faintest first so smaller/denser rings sit on top
+    sizes = [radius * (1 + 0.6 * (rings - i) / rings) for i in range(rings)]
+    for size, stip in zip(sorted(sizes, reverse=True), stipples[::-1]):
+        canvas.create_oval(cx - size, cy - size, cx + size, cy + size,
+                            fill=colour, outline="", stipple=stip)
+
+
 # ── rounded card ─────────────────────────────────────────────────────────────
 class RoundFrame(tk.Canvas):
     """A Canvas that draws a rounded-rect background and otherwise behaves
@@ -560,6 +581,74 @@ class StatTile:
     def set(self, v): self.var.set(str(v))
 
 
+# ── glow toggle switch ────────────────────────────────────────────────────────
+class Switch:
+    """A pill-shaped on/off toggle with a sliding knob and a soft cyan glow
+    when on — replaces the plain square tk.Checkbutton used for things like
+    'Test mode' or 'Random jitter'. Drop-in enough for a BooleanVar: pass the
+    var in, read/set it exactly as you would a Checkbutton's."""
+    def __init__(self, parent, variable, command=None, w=42, h=23, bg=None):
+        pbg = bg if bg is not None else parent["bg"]
+        self.var = variable
+        self.cmd = command
+        self.w, self.h = w, h
+        self.r = h // 2
+        self.cv = tk.Canvas(parent, width=w, height=h, bg=pbg,
+                            highlightthickness=0, cursor="hand2")
+        self._pos = 1.0 if variable.get() else 0.0
+        self._target = self._pos
+        self._anim_job = None
+        self._draw()
+        self.cv.bind("<Button-1>", self._toggle)
+        try:
+            self._trace = self.var.trace_add("write", lambda *a: self._sync())
+        except Exception:
+            self._trace = None
+
+    def _sync(self):
+        self._animate_to(1.0 if self.var.get() else 0.0)
+
+    def _toggle(self, _e=None):
+        self.var.set(not self.var.get())
+        self._animate_to(1.0 if self.var.get() else 0.0)
+        if self.cmd:
+            self.cmd()
+
+    def _animate_to(self, target):
+        self._target = target
+        if self._anim_job is None:
+            self._step()
+
+    def _step(self):
+        diff = self._target - self._pos
+        if abs(diff) < 0.02:
+            self._pos = self._target
+            self._draw()
+            self._anim_job = None
+            return
+        self._pos += diff * 0.4
+        self._draw()
+        self._anim_job = self.cv.after(12, self._step)
+
+    def _draw(self):
+        self.cv.delete("all")
+        t = self._pos
+        track = _lerp_color(self.cv, BORDER2, ACCENT2, t)
+        round_rect(self.cv, 1, 1, self.w - 1, self.h - 1, self.r,
+                   fill=track, outline=BORDER, width=1)
+        kr = self.r - 3
+        kx = 1 + self.r + (self.w - 2 * self.r - 2) * t
+        ky = self.h / 2
+        if t > 0.04:
+            glow(self.cv, kx, ky, kr + 9, colour=ACCENT, rings=3)
+        self.cv.create_oval(kx - kr, ky - kr, kx + kr, ky + kr,
+                            fill="#ffffff", outline="")
+
+    def pack(self, **kw):  self.cv.pack(**kw)
+    def place(self, **kw): self.cv.place(**kw)
+    def grid(self, **kw):  self.cv.grid(**kw)
+
+
 # ── rounded pill button (canvas-drawn, matches the rounded-window theme) ───────
 class RoundButton:
     def __init__(self, parent, text, command, w=300, h=46, r=12,
@@ -616,9 +705,10 @@ class ToggleButton:
         self._sbg = start_bg;   self._ebg = stop_bg
         self.btn = tk.Button(parent, text=start_label,
                              bg=start_bg, fg=BG,
-                             activebackground="#e2e2e2", activeforeground=BG,
                              relief="flat", font=("Segoe UI Black", 11),
                              cursor="hand2", pady=10, command=self._click)
+        self.btn.configure(activebackground=_lerp_color(self.btn, start_bg, "#ffffff", 0.35),
+                           activeforeground=BG)
 
     def _click(self):
         self._running = not self._running
@@ -627,14 +717,16 @@ class ToggleButton:
                                activebackground=RED2, activeforeground="white")
         else:
             self.btn.configure(text=self._sl, bg=self._sbg, fg=BG,
-                               activebackground="#e2e2e2", activeforeground=BG)
+                               activebackground=_lerp_color(self.btn, self._sbg, "#ffffff", 0.35),
+                               activeforeground=BG)
         self._cb(self._running)
 
     def force_stop(self):
         if self._running:
             self._running = False
             self.btn.configure(text=self._sl, bg=self._sbg, fg=BG,
-                               activebackground="#e2e2e2", activeforeground=BG)
+                               activebackground=_lerp_color(self.btn, self._sbg, "#ffffff", 0.35),
+                               activeforeground=BG)
 
 
 # ── status badge ──────────────────────────────────────────────────────────────
@@ -695,11 +787,12 @@ def append_log(box, line, max_lines=400):
 # ── form widgets ──────────────────────────────────────────────────────────────
 def accent_btn(parent, text, cmd, bg=ACCENT2, fg=BG, width=None):
     kw = {"width":width} if width else {}
+    hover = _lerp_color(parent, bg, "#ffffff", 0.35)
     b = tk.Button(parent, text=text, command=cmd, bg=bg, fg=fg,
                   relief="flat", font=("Segoe UI Semibold",9), cursor="hand2",
-                  activebackground="#e2e2e2", activeforeground=BG,
+                  activebackground=hover, activeforeground=BG,
                   pady=7, **kw)
-    b.bind("<Enter>", lambda e: b.configure(bg="#e2e2e2"))  # subtle dim on hover (bg is pure white)
+    b.bind("<Enter>", lambda e: b.configure(bg=hover))
     b.bind("<Leave>", lambda e: b.configure(bg=bg))
     return b
 

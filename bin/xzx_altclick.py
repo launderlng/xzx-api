@@ -272,10 +272,7 @@ class AltClickMacro(ui.Draggable):
         jr = tk.Frame(body, bg=ui.PANEL); jr.pack(fill="x", pady=5)
         tk.Label(jr, text="Random jitter", bg=ui.PANEL, fg=ui.FG2,
                  font=("Segoe UI",9)).pack(side="left")
-        tk.Checkbutton(jr, variable=self.v_jitter, bg=ui.PANEL,
-                       selectcolor=ui.PANEL2,
-                       activebackground=ui.PANEL, relief="flat",
-                       bd=0).pack(side="right")
+        ui.Switch(jr, self.v_jitter, bg=ui.PANEL).pack(side="right")
         return f
 
     def _tab(self, idx):
