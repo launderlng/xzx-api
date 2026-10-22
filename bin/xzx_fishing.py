@@ -683,6 +683,9 @@ class FishingMacro(ui.Draggable):
         self.root.resizable(False, False)
         ui.frameless(self.root, WIN_W, WIN_H, radius=20)
         self._center()
+        # Windows resets position once the overrideredirect style change
+        # actually lands on the native window — re-apply a moment later.
+        self.root.after(30, self._center)
         self._build()
         self.root.protocol("WM_DELETE_WINDOW", self._quit)
 
@@ -707,7 +710,8 @@ class FishingMacro(ui.Draggable):
                 # real band of visible background, not a thin edge sliver
         bgcv = tk.Canvas(self.root, width=WIN_W, height=WIN_H, highlightthickness=0, bg=ui.BG)
         bgcv.place(x=0, y=0)
-        self._snow = ui.Snowfall(bgcv, WIN_W, WIN_H, count=130)
+        self._make_draggable(bgcv)  # drag from anywhere on the background
+        self._snow = ui.Snowfall(bgcv, WIN_W, WIN_H, count=170)
         self._snow.start()
         self.badge = ui.macro_header(self, WIN_W, "🎣", "FISHING MACRO", ui.ACCENT)
 

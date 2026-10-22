@@ -240,6 +240,11 @@ class LoginWindow(Draggable):
         self.root.resizable(False, False)
         self.root.configure(bg=ui.BG)
         self._center()
+        # Windows resets a window's position once overrideredirect's style
+        # change actually lands on the native window, which happens a beat
+        # after we ask for it — so the first _center() above often loses to
+        # that reset. Re-apply it once more a moment later to win the race.
+        self.root.after(30, self._center)
         self.root.after(60, lambda: ui.round_window(
             self.root, WIN_W, WIN_H, self.RADIUS))
         # NOTE: deliberately no -alpha here. Window transparency on a
@@ -261,6 +266,8 @@ class LoginWindow(Draggable):
         self.cv = tk.Canvas(self.root, width=WIN_W, height=WIN_H,
                             highlightthickness=0, bg=ui.BG)
         self.cv.place(x=0, y=0)
+        self._make_draggable(self.cv)  # drag from anywhere on the background,
+                                        # not just the thin title strip
         self.root.after(10, self._paint_bg)
 
         # ── minimal title strip: just a drag handle + close, no label ──────
@@ -305,9 +312,14 @@ class LoginWindow(Draggable):
         inn = tk.Frame(cbody, bg=ui.PANEL)
         inn.pack(fill="both", expand=True, padx=26, pady=26)
 
-        # ── Discord icon ──────────────────────────────────────────────────
-        tk.Label(inn, text="🎮", bg=ui.PANEL, fg="#5865F2",
-                 font=("Segoe UI Emoji", 30)).pack(pady=(0, 12))
+        # ── Discord mark — a simple blurple roundel, not the emoji
+        # controller glyph that used to sit here ───────────────────────────
+        dmark = tk.Canvas(inn, width=52, height=52, bg=ui.PANEL,
+                           highlightthickness=0)
+        dmark.pack(pady=(0, 12))
+        dmark.create_oval(2, 2, 50, 50, fill="#5865F2", outline="")
+        dmark.create_oval(16, 22, 24, 32, fill="white", outline="")
+        dmark.create_oval(28, 22, 36, 32, fill="white", outline="")
 
         tk.Label(inn, text="Sign in with Discord",
                  bg=ui.PANEL, fg=ui.FG,
@@ -334,52 +346,11 @@ class LoginWindow(Draggable):
                                   font=("Segoe UI", 8))
         self.stat_lbl.pack(pady=(10, 0))
 
-        # ── divider ──────────────────────────────────────────────────────
-        drow = tk.Frame(inn, bg=ui.PANEL)
-        drow.pack(fill="x", pady=(18, 14))
-        tk.Frame(drow, bg=ui.BORDER, height=1).pack(side="left", fill="x",
-                                                     expand=True)
-        tk.Label(drow, text="  OR ENTER YOUR KEY  ", bg=ui.PANEL, fg=ui.MUTED,
-                 font=("Segoe UI Semibold", 7)).pack(side="left")
-        tk.Frame(drow, bg=ui.BORDER, height=1).pack(side="left", fill="x",
-                                                     expand=True)
-
-        # ── license key entry ───────────────────────────────────────────────
-        self.key_var = tk.StringVar()
-        key_entry = tk.Entry(inn, textvariable=self.key_var,
-                             bg=ui.PANEL2, fg=ui.FG,
-                             insertbackground=ui.ACCENT, justify="center",
-                             font=("Consolas", 11), relief="flat",
-                             highlightthickness=1, highlightbackground=ui.BORDER,
-                             highlightcolor=ui.ACCENT)
-        key_entry.pack(fill="x", ipady=8)
-        key_entry.insert(0, "XZX-XXXX-XXXX-XXXX")
-        key_entry.configure(fg=ui.MUTED)
-
-        def _focus_in(e):
-            if self.key_var.get() == "XZX-XXXX-XXXX-XXXX":
-                key_entry.delete(0, "end")
-                key_entry.configure(fg=ui.FG)
-        def _focus_out(e):
-            if not self.key_var.get().strip():
-                key_entry.insert(0, "XZX-XXXX-XXXX-XXXX")
-                key_entry.configure(fg=ui.MUTED)
-        key_entry.bind("<FocusIn>", _focus_in)
-        key_entry.bind("<FocusOut>", _focus_out)
-        key_entry.bind("<Return>", lambda e: self._activate_key())
-        self._key_entry = key_entry
-
-        self.key_btn = ui.RoundButton(inn, "Activate Key",
-                                      self._activate_key,
-                                      w=BTN_W, h=40, r=11,
-                                      bg=ui.ACCENT2, hover=ui.ACCENT,
-                                      font=("Segoe UI Black", 10),
-                                      parent_bg=ui.PANEL)
-        self.key_btn.pack(pady=(10, 0))
-
+        # Discord is now the only way in — no raw-key entry box. A linked
+        # Discord account auto-activates whatever key is already tied to it.
         tk.Label(inn, text="🔒  Validated server-side on every launch",
                  bg=ui.PANEL, fg=ui.BORDER,
-                 font=("Segoe UI", 7)).pack(pady=(14, 0))
+                 font=("Segoe UI", 7)).pack(pady=(16, 0))
         card.sync_size()
 
         # ── footer — buy-access link, no clutter ────────────────────────────
@@ -434,7 +405,6 @@ class LoginWindow(Draggable):
         _check_debugger()
         self._setstatus("Opening Discord — sign in and come back…", ui.MUTED)
         self.btn.configure(state="disabled")
-        self.key_btn.configure(state="disabled")
         threading.Thread(target=self._discord_login_flow, daemon=True).start()
 
     def _discord_login_flow(self):
@@ -510,27 +480,15 @@ class LoginWindow(Draggable):
             self._activate_all(codes, session)
         elif mk.startswith("DENIED|NO LICENSE"):
             self.root.after(0, lambda: self._oauth_done(
-                False, "No key found for this Discord account. Buy one or enter a key below."))
+                False, "No key found for this Discord account. Buy access first."))
         else:
             reason = mk.split("|", 1)[-1] if "|" in mk else mk
             self.root.after(0, lambda m=reason: self._oauth_done(False, m))
 
     def _oauth_done(self, ok: bool, message: str = ""):
         self.btn.configure(state="normal")
-        self.key_btn.configure(state="normal")
         if not ok:
             self._setstatus(f"❌  {message}", ui.RED)
-
-    # ── license key activation (bot's own /api/activate) ────────────────────
-    def _activate_key(self):
-        code = self.key_var.get().strip().upper()
-        if not code or code == "XZX-XXXX-XXXX-XXXX":
-            self._setstatus("Enter the key from your purchase DM.", ui.RED)
-            return
-        self.key_btn.configure(state="disabled")
-        self.btn.configure(state="disabled")
-        self._setstatus("Checking key…", ui.MUTED)
-        threading.Thread(target=self._do_activate, args=(code,), daemon=True).start()
 
     def _raw_activate(self, code: str, session: str = "") -> tuple:
         """POSTs /api/activate for one code and returns (ok, detail_or_macro).
@@ -598,7 +556,6 @@ class LoginWindow(Draggable):
             self.root.after(0, lambda: self._oauth_done(False, last_error))
 
     def _login_finish(self, owned_macros: dict, key_length: str = ""):
-        self.key_btn.configure(state="normal")
         self.btn.configure(state="normal")
         codes = sorted(set(owned_macros.values()))
         data = {
@@ -613,85 +570,6 @@ class LoginWindow(Draggable):
         save_license(data)
         self.root.destroy()
         run_hub(data)
-
-    def _do_activate(self, code: str):
-        """The 'paste a key' box flow: links Discord (if not already) then
-        activates this one code against it."""
-        import urllib.request, urllib.parse
-
-        def post(url, data=None):
-            req = urllib.request.Request(url, data=data,
-                                         method="POST" if data is not None else "GET")
-            if data is not None:
-                req.add_header("Content-Type", "application/x-www-form-urlencoded")
-            with urllib.request.urlopen(req, timeout=12) as r:
-                return r.read().decode(errors="replace").strip()
-
-        # ── step 1: ask the bot for a Discord-link session ──────────────────
-        session = ""
-        try:
-            resp = post(f"{BOT_BASE}/api/auth/new", data=b"")
-            parts = resp.split("|", 2)
-            if parts[0] == "OK" and len(parts) >= 3:
-                session, auth_url = parts[1], parts[2]
-                self.root.after(0, lambda: self._setstatus(
-                    "Opening Discord — sign in to link your account…", ui.MUTED))
-                webbrowser.open(auth_url)
-            elif parts[0] == "OFF":
-                session = ""  # linking not required on this bot — skip straight to activate
-            else:
-                self.root.after(0, lambda: self._activate_done(
-                    False, "Couldn't start Discord link. Try again."))
-                return
-        except Exception as exc:
-            self.root.after(0, lambda e=exc: self._activate_done(
-                False, f"Server error: {e}"))
-            return
-
-        # ── step 2: poll until the browser sign-in completes ────────────────
-        if session:
-            deadline = time.time() + 120
-            linked = False
-            while time.time() < deadline:
-                try:
-                    status_resp = urllib.request.urlopen(
-                        f"{BOT_BASE}/api/auth/status?s={urllib.parse.quote(session)}",
-                        timeout=10).read().decode(errors="replace").strip()
-                except Exception:
-                    status_resp = ""
-                if status_resp.startswith("LINKED"):
-                    linked = True
-                    lparts = status_resp.split("|")
-                    self._discord_tag = lparts[1] if len(lparts) > 1 else ""
-                    self._discord_id  = lparts[2] if len(lparts) > 2 else ""
-                    break
-                if status_resp.startswith("ERROR") or status_resp == "EXPIRED":
-                    reason = status_resp.split("|", 1)[-1] if "|" in status_resp else "Link expired"
-                    self.root.after(0, lambda m=reason: self._activate_done(False, m))
-                    return
-                time.sleep(2)
-            if not linked:
-                self.root.after(0, lambda: self._activate_done(
-                    False, "Discord sign-in timed out. Try again."))
-                return
-            self.root.after(0, lambda: self._setstatus(
-                "Linked! Activating your key…", ui.MUTED))
-
-        # ── step 3: activate the key against the (now linked) session ───────
-        ok, result = self._raw_activate(code, session)
-        if ok:
-            self.root.after(0, lambda: self._activate_done(True, code=code, macro=result))
-        else:
-            self.root.after(0, lambda: self._activate_done(False, result))
-
-    def _activate_done(self, ok: bool, message: str = "", code: str = "", macro: str = ""):
-        self.key_btn.configure(state="normal")
-        self.btn.configure(state="normal")
-        if not ok:
-            self._setstatus(f"❌  {message}", ui.RED)
-            return
-        owned = {mid: code for mid in MACRO_IDS} if macro == "all" else {macro: code}
-        self._login_finish(owned)
 
     def run(self): self.root.mainloop()
 
@@ -727,6 +605,9 @@ class HubWindow(Draggable):
         self.root.resizable(False, False)
         self.root.configure(bg=ui.BG)
         self._center()
+        # see LoginWindow._center for why this runs twice — Windows resets
+        # position when the overrideredirect style change actually lands.
+        self.root.after(30, self._center)
         self.root.after(60, lambda: ui.round_window(self.root, HUB_W, HUB_H, 28))
         try: self.root.attributes("-topmost", True)
         except Exception: pass
@@ -821,7 +702,8 @@ class HubWindow(Draggable):
         bgcv = tk.Canvas(self.root, width=HUB_W, height=HUB_H,
                          highlightthickness=0, bg=ui.BG)
         bgcv.place(x=0, y=0)
-        self._snow = ui.Snowfall(bgcv, HUB_W, HUB_H, count=190)
+        self._make_draggable(bgcv)  # drag from anywhere on the background
+        self._snow = ui.Snowfall(bgcv, HUB_W, HUB_H, count=240)
         self._snow.start()
 
         # ── custom title bar ──────────────────────────────────────────────
