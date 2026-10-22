@@ -393,10 +393,9 @@ class LoginWindow(Draggable):
         dl.pack(side="left")
         dl.bind("<Button-1>", lambda e: webbrowser.open(DISCORD_URL))
 
-        # particles
-        self._pts = []
-        self._init_pts()
-        self._anim_pts()
+        # falling snow — the one continuous bit of motion on this screen
+        self._snow = ui.Snowfall(self.cv, WIN_W, WIN_H, count=70)
+        self._snow.start()
 
         # if there's a cached session, show a hint but still require OAuth
         cached = load_license()
@@ -705,38 +704,6 @@ class LoginWindow(Draggable):
             return
         owned = {mid: code for mid in MACRO_IDS} if macro == "all" else {macro: code}
         self._login_finish(owned)
-
-    def _init_pts(self):
-        # a static starfield, not drifting embers — real stars don't all
-        # float upward together. Mix of sizes/brightness gives it depth
-        # without needing a second drawn layer or a redraw loop.
-        shades = [ui.MUTED, ui.FG2, ui.FG, ui.FG]  # weighted toward brighter
-        for _ in range(70):
-            self._pts.append({"x": random.randint(0, WIN_W),
-                               "y": random.randint(0, WIN_H),
-                               "r": random.choice([1, 1, 1, 2]),
-                               "shade": random.choice(shades), "id": None})
-
-    def _anim_pts(self):
-        for p in self._pts:
-            p["id"] = self.cv.create_oval(
-                p["x"]-p["r"], p["y"]-p["r"],
-                p["x"]+p["r"], p["y"]+p["r"],
-                fill=p["shade"], outline="")
-        # a handful twinkle very slowly — the only motion here besides the
-        # one-shot scanline, so it reads as a sky, not a particle effect
-        self.root.after(1800, self._twinkle)
-
-    def _twinkle(self):
-        if not self._pts:
-            return
-        p = random.choice(self._pts)
-        p["shade"] = random.choice([ui.MUTED, ui.FG2, ui.FG, ui.FG])
-        if p["id"]: self.cv.delete(p["id"])
-        p["id"] = self.cv.create_oval(p["x"]-p["r"], p["y"]-p["r"],
-                            p["x"]+p["r"], p["y"]+p["r"],
-                            fill=p["shade"], outline="")
-        self.root.after(1800, self._twinkle)
 
     def run(self): self.root.mainloop()
 

@@ -272,20 +272,25 @@ class MetalMacro(ui.Draggable):
         self.v_scan_y = row("Scan Y",  500, 0, 2160)
 
         tk.Frame(body, bg=ui.BORDER2, height=1).pack(fill="x", pady=8)
-        ui.section_label(body, "Detection", bg=ui.PANEL)
 
-        def rowf(lbl, default, lo, hi):
-            r = tk.Frame(body, bg=ui.PANEL); r.pack(fill="x", pady=5)
+        def rowf(parent, lbl, default, lo, hi):
+            r = tk.Frame(parent, bg=ui.PANEL); r.pack(fill="x", pady=5)
             tk.Label(r, text=lbl, bg=ui.PANEL, fg=ui.FG2,
                      font=("Segoe UI",9)).pack(side="left")
             v = tk.IntVar(value=default)
             ui.spinbox(r, v, lo, hi, step=5, width=7).pack(side="right")
             return v
 
-        self.v_tol = rowf("Colour tolerance", 30, 5, 80)
-        self.v_r   = rowf("Target R", 255, 0, 255)
-        self.v_g   = rowf("Target G", 220, 0, 255)
-        self.v_b   = rowf("Target B",  50, 0, 255)
+        self.v_tol = rowf(body, "Colour tolerance", 30, 5, 80)
+
+        # Exact target RGB is a one-time calibration most people never touch
+        # again — tucked behind "Advanced" instead of 3 more fields showing
+        # by default.
+        adv_wrap, adv = ui.collapsible(body, "Advanced — exact target colour", bg=ui.PANEL)
+        adv_wrap.pack(fill="x", pady=(6, 0))
+        self.v_r = rowf(adv, "Target R", 255, 0, 255)
+        self.v_g = rowf(adv, "Target G", 220, 0, 255)
+        self.v_b = rowf(adv, "Target B",  50, 0, 255)
         return f
 
     def _monitor_offset(self):

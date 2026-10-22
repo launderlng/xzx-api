@@ -252,27 +252,28 @@ class AltClickMacro(ui.Draggable):
         f = tk.Frame(self.cont, bg=ui.PANEL, width=w, height=h)
         body = tk.Frame(f, bg=ui.PANEL)
         body.pack(fill="both", expand=True, padx=20, pady=20)
-        ui.section_label(body, "Click Timing", bg=ui.PANEL)
 
-        def row(lbl, default, lo, hi, step):
-            r = tk.Frame(body, bg=ui.PANEL); r.pack(fill="x", pady=5)
+        def row(parent, lbl, default, lo, hi, step):
+            r = tk.Frame(parent, bg=ui.PANEL); r.pack(fill="x", pady=5)
             tk.Label(r, text=lbl, bg=ui.PANEL, fg=ui.FG2,
                      font=("Segoe UI",9)).pack(side="left")
             v = tk.DoubleVar(value=default)
             ui.spinbox(r, v, lo, hi, step=step, width=7).pack(side="right")
             return v
 
-        self.v_cps     = row("CPS (clicks/sec)",   8.0, 1.0, 30.0, 0.5)
-        self.v_slide   = row("Slide distance (px)", 5,   1,   30,   1)
-        self.v_hold_ms = row("Hold duration (ms)",  80,  10,  300,  10)
+        self.v_cps = row(body, "CPS (clicks/sec)", 8.0, 1.0, 30.0, 0.5)
 
-        tk.Frame(body, bg=ui.BORDER2, height=1).pack(fill="x", pady=8)
-        ui.section_label(body, "Behaviour", bg=ui.PANEL)
         self.v_jitter = tk.BooleanVar(value=True)
         jr = tk.Frame(body, bg=ui.PANEL); jr.pack(fill="x", pady=5)
         tk.Label(jr, text="Random jitter", bg=ui.PANEL, fg=ui.FG2,
                  font=("Segoe UI",9)).pack(side="left")
         ui.Switch(jr, self.v_jitter, bg=ui.PANEL).pack(side="right")
+
+        tk.Frame(body, bg=ui.BORDER2, height=1).pack(fill="x", pady=8)
+        adv_wrap, adv = ui.collapsible(body, "Advanced", bg=ui.PANEL)
+        adv_wrap.pack(fill="x")
+        self.v_slide   = row(adv, "Slide distance (px)", 5,  1,  30,  1)
+        self.v_hold_ms = row(adv, "Hold duration (ms)",  80, 10, 300, 10)
         return f
 
     def _tab(self, idx):

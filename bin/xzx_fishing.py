@@ -522,11 +522,11 @@ class Fisher:
         return True
 
     def wait_bite(self):
-        self.status("Waiting for a bite...", ui.YELLOW)
+        self.status("Waiting for a bite...", "#e0b34a")
         return self.wait_for(find_skill, S["bite_timeout"], stable=2) is not None
 
     def skill_check(self):
-        self.status("Reeling it in!", ui.CYAN)
+        self.status("Reeling it in!", "#4aa3e0")
         self.log("Fish hooked")
         fish_v = bar_v = 0.0
         last = None
@@ -548,7 +548,7 @@ class Fisher:
                 gone_since = None
                 if s["red"] and not said_red:
                     said_red = True
-                    self.status("Legendary fish! Reeling...", ui.RED)
+                    self.status("Legendary fish! Reeling...", "#e05a5a")
                     self.log("Red bar - legendary fish")
                 bl, br = s["bar"]
                 bar_c = (bl + br) / 2.0
@@ -600,7 +600,7 @@ class Fisher:
         """Test mode: report what it sees, press nothing."""
         img = self.screen.grab()
         if img.max() < 8:
-            self.status("Screen looks black - use Windowed Borderless", ui.RED)
+            self.status("Screen looks black - use Windowed Borderless", "#e05a5a")
             return
         c, s = find_cast(img), find_skill(img)
         k = keep_score(img) > 0.7
@@ -609,13 +609,13 @@ class Fisher:
         else:
             self.screen.miss()
         if c:
-            self.status("I can see: the CAST bar", ui.ACCENT)
+            self.status("I can see: the CAST bar", "#c38ae0")
         elif s:
-            self.status("I can see: the SKILL CHECK", ui.ACCENT)
+            self.status("I can see: the SKILL CHECK", "#c38ae0")
         elif k:
-            self.status("I can see: the KEEP prompt", ui.ACCENT)
+            self.status("I can see: the KEEP prompt", "#c38ae0")
         else:
-            self.status("I can see: nothing fishing-related", ui.MUTED)
+            self.status("I can see: nothing fishing-related", "#8a93a6")
 
     def thread_main(self):
         self._sct = None
@@ -799,9 +799,14 @@ class FishingMacro(ui.Draggable):
                   bg=ui.PANEL).pack(side="right")
 
         tk.Frame(body, bg=ui.BORDER2, height=1).pack(fill="x", pady=6)
-        ui.section_label(body, "Timing", bg=ui.PANEL)
+        # Fine-tuning knobs most people never touch after first setup — tucked
+        # behind "Advanced" instead of all five showing by default, so the
+        # settings tab isn't a wall of sliders before you've even started.
+        adv_wrap, adv = ui.collapsible(body, "Advanced timing", bg=ui.PANEL)
+        adv_wrap.pack(fill="x", pady=(6, 0))
+
         def rowf(lbl, key, default, lo, hi, step):
-            r = tk.Frame(body, bg=ui.PANEL); r.pack(fill="x", pady=5)
+            r = tk.Frame(adv, bg=ui.PANEL); r.pack(fill="x", pady=5)
             tk.Label(r, text=lbl, bg=ui.PANEL, fg=ui.FG2, font=("Segoe UI",9)).pack(side="left")
             v = tk.DoubleVar(value=default)
             v.trace_add("write", lambda *a, k=key, vv=v: S.__setitem__(k, vv.get()))

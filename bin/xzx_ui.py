@@ -1,37 +1,40 @@
 """
-XZX shared UI — v6  (glass theme: cool near-black panels, glowing cyan accent)
+XZX shared UI — v7  (mono theme: true black/white, one layer, no colour noise)
 """
 import tkinter as tk
-import os, sys
+import os, sys, random, math, time as _time
 
 # ── palette ───────────────────────────────────────────────────────────────────
-# Theme: dark glass over a cool navy-black, one glowing accent colour that
-# carries "this is active/on", rather than mono's structure-only hierarchy.
-# Panels sit a clear step lighter than BG with a cool (slightly blue) tint
-# instead of a neutral grey, which is what actually reads as "glass panel"
-# rather than "slightly lighter black rectangle".
-BG       = "#070a0e"          # near-black, cool navy tint
-GRAD1    = "#0a0f15"
-GRAD2    = "#0d131a"
-GRAD3    = "#070a0e"
-PANEL    = "#121922"
-PANEL2   = "#0b0f15"
-PANEL3   = "#1b2531"
-ACCENT   = "#2dd4ea"          # glowing cyan — the one accent colour, used sparingly
-ACCENT2  = "#1aa6ba"          # deeper teal-cyan — resting fill; ACCENT is its hover/glow
-ACCENT3  = "#3a4a56"
-FG       = "#eef5f8"
-FG2      = "#9fb3bf"
-MUTED    = "#5f727d"
-BORDER   = "#2c3946"
-BORDER2  = "#1c2730"
+# Back to flat black and white — no navy, no cyan, no gradient-as-decoration.
+# Structure (borders, weight, spacing) carries the hierarchy instead of colour.
+# ACCENT2 is kept a notch off pure white (not identical to ACCENT) purely so
+# every button's hover state — computed as a lerp from its own bg toward
+# white — still has somewhere to go; identical values there is what made
+# hovering invisible in an earlier pass. PANEL et al stay the lighter-than-
+# true-black values from the contrast fix, for the same reason: a rounded
+# card needs to actually read as a card against the background.
+BG       = "#000000"          # true black
+GRAD1    = "#000000"
+GRAD2    = "#0a0a0a"
+GRAD3    = "#000000"
+PANEL    = "#141414"
+PANEL2   = "#0a0a0a"
+PANEL3   = "#1c1c1c"
+ACCENT   = "#ffffff"          # pure white — the one "bold" colour is no colour at all
+ACCENT2  = "#dcdcdc"          # a hair off pure white, so hover has somewhere to brighten to
+ACCENT3  = "#4d4d4d"
+FG       = "#ffffff"
+FG2      = "#c2c2c2"
+MUTED    = "#6b6b6b"
+BORDER   = "#333333"
+BORDER2  = "#2a2a2a"
 GREEN    = "#3ddc74"
 GREEN2   = "#27b65c"
-RED      = "#ff5a68"
+RED      = "#ff4d5e"
 RED2     = "#e0313f"
-CYAN     = "#5fb0ff"          # second macro accent — a cooler blue, distinct from ACCENT's cyan
-ORANGE   = "#ffb454"
-YELLOW   = "#ffd454"
+CYAN     = "#b3b3b3"          # second macro accent — light grey, distinct from pure white
+ORANGE   = "#ffffff"
+YELLOW   = "#ffffff"
 TAB_UL   = ACCENT             # tab underline
 
 SIDEBAR_W = 52
@@ -124,6 +127,64 @@ def frameless(root: tk.Tk, w: int, h: int, radius: int = 20, topmost: bool = Tru
         try: root.attributes("-topmost", True)
         except Exception: pass
     root.after(60, lambda: round_window(root, w, h, radius))
+
+
+class Snowfall:
+    """A light snowfall drifting down a window's background canvas — the
+    one continuous bit of motion behind an otherwise static dark panel.
+    Independent per window/canvas; create after the canvas exists, call
+    .start() once, .stop() on window close so the .after() loop doesn't
+    keep firing against a destroyed widget."""
+    def __init__(self, canvas, w, h, count=55):
+        self.cv, self.w, self.h = canvas, w, h
+        self._running = False
+        self._job = None
+        self._flakes = [self._new_flake(y=random.uniform(0, h)) for _ in range(count)]
+
+    def _new_flake(self, y=None):
+        r = random.choice([1, 1, 1, 2, 2, 3])
+        return {
+            "x": random.uniform(0, self.w),
+            "y": y if y is not None else -4,
+            "r": r,
+            "vy": random.uniform(0.15, 0.45) * (1 + r * 0.12),
+            "sway": random.uniform(0.3, 1.0),
+            "phase": random.uniform(0, 2 * math.pi),
+            "shade": random.choice([MUTED, FG2, FG2, FG]),
+            "id": None,
+        }
+
+    def start(self):
+        if self._running:
+            return
+        self._running = True
+        for f in self._flakes:
+            f["id"] = self.cv.create_oval(0, 0, 0, 0, fill=f["shade"], outline="")
+        self._tick()
+
+    def stop(self):
+        self._running = False
+        if self._job:
+            try: self.cv.after_cancel(self._job)
+            except Exception: pass
+            self._job = None
+
+    def _tick(self):
+        if not self._running:
+            return
+        try:
+            t = _time.time()
+            for f in self._flakes:
+                f["y"] += f["vy"]
+                if f["y"] > self.h + 4:
+                    f.update(self._new_flake(y=-4))
+                    self.cv.itemconfigure(f["id"], fill=f["shade"])
+                sx = f["x"] + math.sin(t * f["sway"] + f["phase"]) * 7
+                r = f["r"]
+                self.cv.coords(f["id"], sx - r, f["y"] - r, sx + r, f["y"] + r)
+            self._job = self.cv.after(40, self._tick)
+        except tk.TclError:
+            self._running = False  # canvas was destroyed mid-tick
 
 
 def get_monitors():
@@ -842,6 +903,39 @@ def section_label(parent, text, bg=PANEL):
     tk.Frame(f, bg=BORDER2, height=1).pack(side="left", fill="x",
                                            expand=True, padx=(8,0), pady=1)
     return f
+
+
+def collapsible(parent, title, bg=PANEL, start_open=False):
+    """A click-to-expand section: a header row (chevron + title) that shows
+    or hides a body frame below it. Used to tuck fine-tuning settings a
+    macro doesn't need day to day behind 'Advanced', so the default
+    settings view only shows what most people actually touch."""
+    state = {"open": start_open}
+    wrap = tk.Frame(parent, bg=bg)
+    head = tk.Frame(wrap, bg=bg, cursor="hand2")
+    head.pack(fill="x", pady=(2, 0))
+    chevron = tk.Label(head, text="▾" if start_open else "▸", bg=bg,
+                       fg=MUTED, font=("Segoe UI", 9), width=2)
+    chevron.pack(side="left")
+    lbl = tk.Label(head, text=title, bg=bg, fg=FG2,
+                   font=("Segoe UI Semibold", 9), cursor="hand2")
+    lbl.pack(side="left")
+    body = tk.Frame(wrap, bg=bg)
+    if start_open:
+        body.pack(fill="x", pady=(6, 0))
+
+    def toggle(_e=None):
+        state["open"] = not state["open"]
+        chevron.configure(text="▾" if state["open"] else "▸")
+        if state["open"]:
+            body.pack(fill="x", pady=(6, 0))
+        else:
+            body.pack_forget()
+
+    head.bind("<Button-1>", toggle)
+    lbl.bind("<Button-1>", toggle)
+    chevron.bind("<Button-1>", toggle)
+    return wrap, body
 
 
 def macro_header(owner, w: int, icon: str, title: str, accent: str):
